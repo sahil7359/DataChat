@@ -133,10 +133,18 @@ class DataChatError(Exception):
 class LLMProviderError(DataChatError):
     """A single provider call failed. Caught by the router to trigger fallback."""
 
-    def __init__(self, provider: str, message: str, *, retryable: bool = True) -> None:
+    def __init__(
+        self,
+        provider: str,
+        message: str,
+        *,
+        retryable: bool = True,
+        retry_after: float | None = None,
+    ) -> None:
         super().__init__(f"{provider}: {message}")
         self.provider = provider
         self.retryable = retryable
+        self.retry_after = retry_after
 
 
 class AllProvidersUnavailableError(DataChatError):
