@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     executor_database_url: str = (
         "postgresql+asyncpg://datachat_exec:datachat_exec@localhost:5432/datachat"
     )
+    # Login password for the datachat_exec role, set by the roles migration. Must
+    # match the credential embedded in executor_database_url. Overridden at
+    # go-live; the dev default matches docker-compose.
+    executor_role_password: SecretStr = SecretStr("datachat_exec")
     redis_url: str = "redis://localhost:6379/0"
 
     # --- LLM providers ---------------------------------------------------
