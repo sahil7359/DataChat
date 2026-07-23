@@ -15,11 +15,11 @@
 | Alembic migrations (schema + pgvector + roles) | 2 | Done | async env; 0001 app+pgvector+HNSW, 0002 analytics, 0003 roles/grants; chain+security static tests | 2026-07-23 |
 | Repository adapters | 2 | Done | Sql* repos implement domain ports; row<->entity mappers; integration round-trips (CI) | 2026-07-23 |
 | Read-only role + execution safety verified | 2 | Done | analytics_ro SELECT-only + datachat_exec timeout/read-only; write-rejection + cross-schema tests (CI) | 2026-07-23 |
-| LLM Adapters (Gemini/Groq/OpenRouter) | 3 | To Do | | |
-| ResilientProvider decorator stack | 3 | To Do | | |
-| CircuitBreaker + Redis shared state | 3 | To Do | | |
-| ProviderRouter (Strategy) + fallback | 3 | To Do | | |
-| EmbeddingProvider | 3 | To Do | | |
+| LLM Adapters (Gemini/Groq/OpenRouter) | 3 | Done | httpx adapters + MockTransport tests; retryable-error mapping; OpenAI-compat base | 2026-07-23 |
+| ResilientProvider decorator stack | 3 | Done | Trace->Cache->Breaker->Retry, explicit order; backoff+jitter, retry_after, capped | 2026-07-23 |
+| CircuitBreaker + Redis shared state | 3 | Done | CLOSED/OPEN/HALF_OPEN via Cache port; injected clock; per-provider; transition tests | 2026-07-23 |
+| ProviderRouter (Strategy) + fallback | 3 | Done | task+health-aware order; Gemini->Groq failover test; OCP add-provider test | 2026-07-23 |
+| EmbeddingProvider | 3 | Done | Gemini embed adapter + deterministic local-hash offline path | 2026-07-23 |
 | Ingestion pipeline (CoR) + connectors | 4 | To Do | | |
 | SchemaCatalog pgvector retrieval | 4 | To Do | | |
 | Seed fixtures + golden inputs | 4 | To Do | | |
