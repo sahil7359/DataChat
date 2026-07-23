@@ -1,0 +1,80 @@
+# Local topology mirrors production (NFR-8): postgres+pgvector, redis, backend,
+# frontend, mlflow. Everything runs against .env with USE_MOCKS=true so no real
+# keys are needed. Real hosts (Neon/Upstash/Vercel/Render) are documented in
+# GOLIVE.md; here we self-host the equivalents.
+
+name: datachat
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-datachat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datachat}
+      POSTGRES_DB: ${POSTGRES_DB:-datachat}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datachat}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
+      REDIS_URL: redis://redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    command: >
+      mlflow server
+      --host 0.0.0.0 --port 5000
+      --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
+      --default-artifact-root /mlartifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlartifacts:/mlartifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  mlartifacts:
