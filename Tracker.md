@@ -8,9 +8,9 @@
 | Task | Phase | Status | Notes | Date |
 |---|---|---|---|---|
 | Repo scaffold, docker-compose, tooling, hygiene files | 0 | Done | uv backend + Next.js FE + compose + Makefile + pre-commit; full local gate green (ruff, mypy --strict, pytest, bandit, gitleaks, pip-audit 0 vulns) | 2026-07-23 |
-| Domain entities, value objects, results | 1 | To Do | | |
-| Domain ports (interfaces) + fakes | 1 | To Do | | |
-| Config (Pydantic Settings) | 1 | To Do | | |
+| Domain entities, value objects, results | 1 | Done | frozen dataclasses; Result/Either + error taxonomy; 99% cov | 2026-07-23 |
+| Domain ports (interfaces) + fakes | 1 | Done | 6 role-specific Protocols; fakes for every port; conformance test | 2026-07-23 |
+| Config (Pydantic Settings) | 1 | Done | env-only, mock-first, SecretStr keys, $0 defaults | 2026-07-23 |
 | SQLAlchemy models (app schema) | 2 | To Do | | |
 | Alembic migrations (schema + pgvector + roles) | 2 | To Do | | |
 | Repository adapters | 2 | To Do | | |
@@ -72,6 +72,7 @@
 | 2026-07-23 | mlflow 2.x / pyarrow / starlette 0.46 carried known CVEs | Bumped to mlflow 3.14.0, pyarrow 24, starlette 1.3.1, pytest 9.1.1; pip-audit now clean. |
 | 2026-07-23 | Dev box blocks mypy/_ctypes/exe-shims via Windows Application Control (WDAC) | Run pure-python mypy from a signed-interpreter tool venv (`scripts/typecheck.sh`); invoke pytest/ruff/bandit/pip-audit as `python -m ...`. CI (Linux) uses the standard invocations. |
 | 2026-07-23 | semgrep has poor Windows support | Wired into CI (Linux) in Phase 12; local SAST covered by bandit + ruff's flake8-bandit (S) rules. |
+| 2026-07-23 | import-linter's grimp (`_rustgrimp`) also WDAC-blocked locally | Contracts run in CI; locally the dependency rule is enforced by an ast-based fitness test (`tests/unit/test_architecture.py`). |
 
 ## Deferred to GOLIVE.md (needs user accounts)
 
