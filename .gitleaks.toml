@@ -1,0 +1,21 @@
+# gitleaks config. Extends the bundled ruleset and allowlists paths that are
+# never committed (virtualenvs, node_modules, build caches, local learn notes).
+# The authoritative gate scans git history, which excludes these by construction;
+# the allowlist keeps `gitleaks dir` usable locally too.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-tracked / vendored paths that produce false positives"
+paths = [
+  '''(^|/)\.venv/''',
+  '''(^|/)\.venv-mypy/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.next/''',
+  '''(^|/)\.mypy_cache/''',
+  '''(^|/)\.ruff_cache/''',
+  '''(^|/)\.pytest_cache/''',
+  '''(^|/)learn/''',
+  '''(^|/)uv\.lock$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+]
