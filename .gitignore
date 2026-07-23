@@ -1,0 +1,57 @@
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ---- uv ----
+.uv/
+.venv-mypy/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+pnpm-debug.log*
+
+# ---- MLflow / local artifacts ----
+mlruns/
+mlartifacts/
+*.db
+
+# ---- Data (keep fixtures/seeds, ignore bulk downloads) ----
+data/raw/
+data/cache/
+!tests/fixtures/**
+
+# ---- Local learning notes (personal, never published) ----
+learn/
+
+# ---- Local tooling state ----
+.claude/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Docker ----
+docker-compose.override.yml
