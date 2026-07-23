@@ -116,6 +116,54 @@ omit = ["app/interface/*", "tests/*"]
 
 [tool.coverage.report]
 show_missing = true
+exclude_also = [
+    "\\.\\.\\.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(typing\\.)?overload",
+    "class .*\\(Protocol\\):",
+]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "migrations"]
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Domain never imports outward"
+type = "forbidden"
+source_modules = ["app.domain"]
+forbidden_modules = [
+    "app.application",
+    "app.infrastructure",
+    "app.interface",
+    "app.config",
+    "app.container",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain is framework-free"
+type = "forbidden"
+source_modules = ["app.domain"]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "sqlalchemy",
+    "asyncpg",
+    "alembic",
+    "langgraph",
+    "langchain_core",
+    "mlflow",
+    "redis",
+    "httpx",
+    "sqlglot",
+    "pydantic",
+]
+
+[[tool.importlinter.contracts]]
+name = "Clean architecture layers"
+type = "layers"
+containers = ["app"]
+layers = ["interface", "application", "domain"]
+exhaustive = false
