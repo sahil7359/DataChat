@@ -15,6 +15,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
     "asyncpg>=0.30,<0.31",
     "alembic>=1.14,<1.15",
+    "pgvector>=0.3.6,<0.4",
     "sqlglot>=26,<27",
     "httpx>=0.28,<0.29",
     "redis>=5.2,<6",
@@ -95,7 +96,7 @@ mypy_path = "."
 exclude = ["migrations/versions/"]
 
 [[tool.mypy.overrides]]
-module = ["sqlglot.*", "langgraph.*", "langchain_core.*", "mlflow.*"]
+module = ["sqlglot.*", "langgraph.*", "langchain_core.*", "mlflow.*", "pgvector.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
