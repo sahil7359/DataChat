@@ -11,10 +11,10 @@
 | Domain entities, value objects, results | 1 | Done | frozen dataclasses; Result/Either + error taxonomy; 99% cov | 2026-07-23 |
 | Domain ports (interfaces) + fakes | 1 | Done | 6 role-specific Protocols; fakes for every port; conformance test | 2026-07-23 |
 | Config (Pydantic Settings) | 1 | Done | env-only, mock-first, SecretStr keys, $0 defaults | 2026-07-23 |
-| SQLAlchemy models (app schema) | 2 | To Do | | |
-| Alembic migrations (schema + pgvector + roles) | 2 | To Do | | |
-| Repository adapters | 2 | To Do | | |
-| Read-only role + execution safety verified | 2 | To Do | | |
+| SQLAlchemy models (app schema) | 2 | Done | app + analytics ORM (11+4 tables), pgvector(768), CHECK/FK/index; metadata test | 2026-07-23 |
+| Alembic migrations (schema + pgvector + roles) | 2 | Done | async env; 0001 app+pgvector+HNSW, 0002 analytics, 0003 roles/grants; chain+security static tests | 2026-07-23 |
+| Repository adapters | 2 | Done | Sql* repos implement domain ports; row<->entity mappers; integration round-trips (CI) | 2026-07-23 |
+| Read-only role + execution safety verified | 2 | Done | analytics_ro SELECT-only + datachat_exec timeout/read-only; write-rejection + cross-schema tests (CI) | 2026-07-23 |
 | LLM Adapters (Gemini/Groq/OpenRouter) | 3 | To Do | | |
 | ResilientProvider decorator stack | 3 | To Do | | |
 | CircuitBreaker + Redis shared state | 3 | To Do | | |
