@@ -38,6 +38,7 @@ from app.infrastructure.llm.gemini import GeminiAdapter
 from app.infrastructure.llm.groq import GroqAdapter
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.llm.router import ProviderRouter, TaskAwarePolicy
+from app.infrastructure.observability.metrics import Metrics
 from app.infrastructure.observability.mlflow_tracer import MLflowTracer
 from app.infrastructure.observability.tracing import NullTracer
 from app.infrastructure.sql.cache import CachingQueryExecutor
@@ -54,6 +55,7 @@ class Container:
             NullTracer() if settings.use_mocks else MLflowTracer(settings.mlflow_tracking_uri)
         )
         self._http = httpx.AsyncClient(timeout=settings.llm_timeout_s)
+        self._metrics = Metrics()
         self._cache: Cache = RedisCache.from_url(settings.redis_url)
         self._app_engine = create_app_engine(settings)
         self._sessionmaker = create_session_factory(self._app_engine)
@@ -66,6 +68,10 @@ class Container:
     @property
     def cache(self) -> Cache:
         return self._cache
+
+    @property
+    def metrics(self) -> Metrics:
+        return self._metrics
 
     def embedder(self) -> EmbeddingProvider:
         key = self._settings.gemini_api_key.get_secret_value()
@@ -113,7 +119,7 @@ class Container:
             row_cap=self._settings.row_cap,
             timeout_s=self._settings.statement_timeout_ms / 1000,
         )
-        return CachingQueryExecutor(inner, self._cache)
+        return CachingQueryExecutor(inner, self._cache, metrics=self._metrics)
 
     def node_dependencies(self) -> NodeDependencies:
         return NodeDependencies(

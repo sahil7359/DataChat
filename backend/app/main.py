@@ -19,10 +19,11 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from app import __version__
 from app.config import Settings, get_settings
 from app.infrastructure.observability.logging import configure_logging, get_logger
+from app.infrastructure.observability.metrics import Metrics
 from app.interface.api.errors import register_exception_handlers
 from app.interface.api.middleware import RequestContextMiddleware
 from app.interface.api.rate_limit import RateLimiter
-from app.interface.api.routers import chat, conversations, datasets, health
+from app.interface.api.routers import chat, conversations, datasets, health, metrics
 
 _log = get_logger("app")
 
@@ -40,6 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="DataChat API", version=__version__, lifespan=lifespan)
     app.state.settings = settings
+    if not getattr(app.state, "metrics", None):
+        app.state.metrics = Metrics()
 
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
@@ -55,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(conversations.router, prefix=api)
     app.include_router(datasets.router, prefix=api)
     app.include_router(health.router)
+    app.include_router(metrics.router)
     return app
 
 
@@ -65,6 +69,7 @@ async def _setup(app: FastAPI, settings: Settings) -> None:
     from app.infrastructure.observability.mlflow_tracer import register_prompts
 
     container = Container(settings)
+    app.state.metrics = container.metrics
     if not settings.use_mocks:
         register_prompts(PROMPT_VERSIONS)
     stack = AsyncExitStack()

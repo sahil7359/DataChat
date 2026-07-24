@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Protocol
 
 from app.domain.entities import ExecutionResult
 from app.domain.ports.cache import Cache
@@ -17,17 +18,33 @@ from app.domain.ports.sql import QueryExecutor
 from app.domain.results import ExecutionError, Ok, Result
 
 
+class MetricsSink(Protocol):
+    def inc(self, name: str, value: float = ..., **labels: str) -> None: ...
+
+
 class CachingQueryExecutor:
-    def __init__(self, inner: QueryExecutor, cache: Cache, *, ttl_s: int = 900) -> None:
+    def __init__(
+        self,
+        inner: QueryExecutor,
+        cache: Cache,
+        *,
+        ttl_s: int = 900,
+        metrics: MetricsSink | None = None,
+    ) -> None:
         self._inner = inner
         self._cache = cache
         self._ttl = ttl_s
+        self._metrics = metrics
 
     async def execute(self, sql: str) -> Result[ExecutionResult, ExecutionError]:
         key = _key(sql)
         cached = await self._cache.get(key)
         if cached is not None:
+            if self._metrics is not None:
+                self._metrics.inc("cache_hits_total")
             return Ok(_decode(cached))
+        if self._metrics is not None:
+            self._metrics.inc("cache_misses_total")
         result = await self._inner.execute(sql)
         if isinstance(result, Ok):
             await self._cache.set(key, _encode(result.value), self._ttl)

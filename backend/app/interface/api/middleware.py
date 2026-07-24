@@ -33,5 +33,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             structlog.contextvars.unbind_contextvars("request_id", "path")
         response.headers[_HEADER] = request_id
+
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.inc(
+                "http_requests_total", method=request.method, status=str(response.status_code)
+            )
+
         _log.info("request", method=request.method, status=response.status_code)
         return response
