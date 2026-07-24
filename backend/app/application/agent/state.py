@@ -14,6 +14,7 @@ from app.domain.entities import (
     Plan,
     RetrievedContext,
     ValidationResult,
+    VerificationResult,
 )
 from app.domain.value_objects import ChartSpec
 
@@ -28,8 +29,15 @@ class AgentState(TypedDict, total=False):
     candidate_sql: str | None
     validation: ValidationResult | None
     execution: ExecutionResult | None
+    verification: VerificationResult | None
     explanation: str | None
     chart_spec: ChartSpec | None
+
+    # HITL
+    approve_sql: bool
+    hitl_decision: str | None
+    edited_sql: str | None
+    clarification: str | None
 
     error: str | None
     error_code: str | None
