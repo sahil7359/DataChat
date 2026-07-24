@@ -25,6 +25,7 @@ def new_uuid() -> str:
 
 
 class Provider(StrEnum):
+    OLLAMA = "ollama"
     GEMINI = "gemini"
     GROQ = "groq"
     OPENROUTER = "openrouter"

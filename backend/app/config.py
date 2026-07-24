@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr = SecretStr("")
     # OpenRouter stays off by default to remain strictly $0 (TechSpec §11).
     openrouter_enabled: bool = False
+
+    # Ollama runs as a separate, network-boundary AI service (e.g. on a home GPU
+    # behind a Cloudflare tunnel). ollama_api_key is the bearer token the tunnel
+    # requires, so the exposed endpoint can't be abused. When enabled it is the
+    # primary provider; Gemini/Groq remain automatic fallbacks (breaker-driven).
+    ollama_enabled: bool = False
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_api_key: SecretStr = SecretStr("")
+    ollama_model: str = "llama3.2"
+
     provider_order: tuple[Provider, ...] = (Provider.GEMINI, Provider.GROQ)
 
     # --- Embeddings ------------------------------------------------------
