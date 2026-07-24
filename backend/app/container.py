@@ -37,6 +37,7 @@ from app.infrastructure.llm.embeddings import GeminiEmbeddingAdapter, LocalHashE
 from app.infrastructure.llm.gemini import GeminiAdapter
 from app.infrastructure.llm.groq import GroqAdapter
 from app.infrastructure.llm.mock import MockLLMProvider
+from app.infrastructure.llm.ollama import OllamaAdapter
 from app.infrastructure.llm.router import ProviderRouter, TaskAwarePolicy
 from app.infrastructure.observability.metrics import Metrics
 from app.infrastructure.observability.mlflow_tracer import MLflowTracer
@@ -90,6 +91,19 @@ class Container:
             cooldown_s=self._settings.breaker_cooldown_s,
         )
         providers: dict[Provider, LLMProvider] = {}
+        if self._settings.ollama_enabled:
+            providers[Provider.OLLAMA] = build_resilient(
+                OllamaAdapter(
+                    self._http,
+                    self._settings.ollama_api_key.get_secret_value(),
+                    base_url=self._settings.ollama_base_url,
+                    model=self._settings.ollama_model,
+                    timeout_s=self._settings.llm_timeout_s,
+                ),
+                tracer=self._tracer,
+                cache=self._cache,
+                breaker=breaker,
+            )
         gemini_key = self._settings.gemini_api_key.get_secret_value()
         if gemini_key:
             providers[Provider.GEMINI] = build_resilient(

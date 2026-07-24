@@ -45,13 +45,12 @@ class TaskAwarePolicy:
     def order(self, task: TaskKind, available: Sequence[Provider]) -> list[Provider]:
         preferred = self._PREFER.get(task, self._default)
         available_set = set(available)
+        # A self-hosted Ollama is the operator's chosen AI (free, private, local),
+        # so it leads for every task when present; cloud vendors are the fallback.
+        lead = (Provider.OLLAMA,) if Provider.OLLAMA in available_set else ()
         ordered: list[Provider] = []
-        for provider in (*preferred, *self._default):
+        for provider in (*lead, *preferred, *self._default, *available):
             if provider in available_set and provider not in ordered:
-                ordered.append(provider)
-        # Anything available but unmentioned still gets a turn (last resort).
-        for provider in available:
-            if provider not in ordered:
                 ordered.append(provider)
         return ordered
 
