@@ -23,8 +23,8 @@
 | Ingestion pipeline (CoR) + connectors | 4 | Done | CoR steps (fetch->validate+checksum->load->embed->version), idempotent; seed/WDI/OWID connectors | 2026-07-24 |
 | SchemaCatalog pgvector retrieval | 4 | Done | pgvector catalog (cosine top-k) + offline in-memory catalog; retrieval tests green | 2026-07-24 |
 | Seed fixtures + golden inputs | 4 | Done | curated 15-country seed + few-shot + eval examples in definitions; loads via --dataset seed | 2026-07-24 |
-| SQL guardrail chain (sqlglot) | 5 | To Do | | |
-| Read-only QueryExecutor (Bulkhead) + cache | 5 | To Do | | |
+| SQL guardrail chain (sqlglot) | 5 | Done | AST CoR: SingleStatement/ReadOnly(incl CTE-write)/TableAllowlist/NoSystemCatalog/MandatoryLimit; injection corpus 100% blocked | 2026-07-24 |
+| Read-only QueryExecutor (Bulkhead) + cache | 5 | Done | streamed row cap + timeout on datachat_exec engine; redis result-cache decorator; executor integration tests (CI) | 2026-07-24 |
 | Agent state + BaseNode (Template Method) | 6 | To Do | | |
 | MVP nodes + GraphBuilder + checkpointer | 6 | To Do | | |
 | NodeFactory + composition root (DI) | 6 | To Do | | |
