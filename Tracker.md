@@ -25,9 +25,9 @@
 | Seed fixtures + golden inputs | 4 | Done | curated 15-country seed + few-shot + eval examples in definitions; loads via --dataset seed | 2026-07-24 |
 | SQL guardrail chain (sqlglot) | 5 | Done | AST CoR: SingleStatement/ReadOnly(incl CTE-write)/TableAllowlist/NoSystemCatalog/MandatoryLimit; injection corpus 100% blocked | 2026-07-24 |
 | Read-only QueryExecutor (Bulkhead) + cache | 5 | Done | streamed row cap + timeout on datachat_exec engine; redis result-cache decorator; executor integration tests (CI) | 2026-07-24 |
-| Agent state + BaseNode (Template Method) | 6 | To Do | | |
-| MVP nodes + GraphBuilder + checkpointer | 6 | To Do | | |
-| NodeFactory + composition root (DI) | 6 | To Do | | |
+| Agent state + BaseNode (Template Method) | 6 | Done | AgentState TypedDict; BaseNode span->run->validate-output; untrusted LLM output checked in-node | 2026-07-24 |
+| MVP nodes + GraphBuilder + checkpointer | 6 | Done | understand..respond; StateGraph + guardrail/execute branches; MemorySaver in tests, PostgresSaver in prod | 2026-07-24 |
+| NodeFactory + composition root (DI) | 6 | Done | NodeFactory by name; container.py wires mock/real adapters; end-to-end test with fakes (no DB/keys) | 2026-07-24 |
 | HITL approve/clarify (interrupt + resume) | 7 | To Do | | |
 | Verify + bounded repair loop | 7 | To Do | | |
 | Visualize node (Vega-Lite spec) | 7 | To Do | | |
