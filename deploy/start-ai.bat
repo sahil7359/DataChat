@@ -14,6 +14,13 @@ REM  Copy the https://<...>.trycloudflare.com URL that cloudflared prints and
 REM  set  DATACHAT_OLLAMA_BASE_URL = https://<that-host>/v1  on Render.
 REM ============================================================================
 
+if not exist deploy\Caddyfile (
+  copy deploy\Caddyfile.example deploy\Caddyfile >nul
+  echo Created deploy\Caddyfile from the template — edit it and set your secret, then re-run.
+  pause
+  exit /b 1
+)
+
 echo Pulling the model (skips if already present)...
 ollama pull llama3.2
 

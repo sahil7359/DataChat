@@ -63,8 +63,10 @@ Your GPU is the AI. We run it, lock it behind a password, and give it a public U
    ```bash
    python -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
-   Copy the output. Open `deploy/Caddyfile`, replace `CHANGE_ME_LONG_RANDOM_SECRET`
-   with it, and save. **Keep this secret** — you'll paste it into Render too.
+   Copy the output. Copy `deploy/Caddyfile.example` to `deploy/Caddyfile` (that copy
+   is git-ignored, so your secret never lands in git), replace
+   `CHANGE_ME_LONG_RANDOM_SECRET` with your secret, and save. **Keep this secret** —
+   you'll paste it into Render too.
 4. Double-click **`deploy/start-ai.bat`**. Two windows open (Caddy + the tunnel).
 
 **✅ Check:** the tunnel window prints a line like

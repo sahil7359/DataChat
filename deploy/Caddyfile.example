@@ -1,0 +1,16 @@
+# Auth proxy that guards your local Ollama. It only forwards requests that carry
+# the correct bearer token, so nobody who finds your tunnel URL can use your GPU.
+#
+# Setup:
+#   1. Copy this file to deploy/Caddyfile   (that copy is git-ignored, so your
+#      secret never lands in git).
+#   2. Replace CHANGE_ME_LONG_RANDOM_SECRET with your own secret.
+#      Generate one:  python -c "import secrets; print(secrets.token_urlsafe(32))"
+#   3. Use the SAME secret as DATACHAT_OLLAMA_API_KEY on Render.
+#   4. Run:  caddy run --config deploy/Caddyfile
+
+:11435 {
+	@unauthorized not header Authorization "Bearer CHANGE_ME_LONG_RANDOM_SECRET"
+	respond @unauthorized "unauthorized" 401
+	reverse_proxy localhost:11434
+}

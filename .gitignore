@@ -47,6 +47,9 @@ learn/
 # ---- Local tooling state ----
 .claude/
 
+# ---- Local secrets (real Caddy config holds your Ollama token) ----
+deploy/Caddyfile
+
 # ---- Editors / OS ----
 .vscode/
 .idea/
