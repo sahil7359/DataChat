@@ -58,8 +58,9 @@ class QueryService:
         conversation_id: str | None = None,
         *,
         approve_sql: bool = False,
+        run_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
-        run_id = new_uuid()
+        run_id = run_id or new_uuid()
         config = {"configurable": {"thread_id": run_id}}
         initial = _initial_state(question, conversation_id, run_id, approve_sql=approve_sql)
         async for event in self._drive(
