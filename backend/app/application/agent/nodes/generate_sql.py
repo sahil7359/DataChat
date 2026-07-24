@@ -43,6 +43,10 @@ class GenerateSqlNode(BaseNode):
             "candidate_sql": sql,
             "provider_used": response.provider.value,
             "prompt_versions": prompt_versions,
+            # Clear the prior failure now that we've used it as feedback, so a
+            # repaired attempt starts clean.
+            "error": None,
+            "error_code": None,
             "stage": AgentStage.GENERATE_SQL.value,
         }
 

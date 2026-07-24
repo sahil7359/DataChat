@@ -23,6 +23,9 @@ class GuardrailNode(BaseNode):
         validation = self._validator.validate(sql)
         update: NodeUpdate = {"validation": validation, "stage": AgentStage.GUARDRAIL.value}
         if not validation.ok:
-            update["error"] = "I couldn't produce a safe query for that question."
+            violation = validation.first_violation
+            # The technical reason drives the repair prompt and the audit log; the
+            # BFF maps error_code to a safe user-facing message.
+            update["error"] = violation.reason if violation and violation.reason else "unsafe SQL"
             update["error_code"] = "guardrail_blocked"
         return update

@@ -14,10 +14,14 @@ from app.application.agent.nodes.execute import ExecuteNode
 from app.application.agent.nodes.explain import ExplainNode
 from app.application.agent.nodes.generate_sql import GenerateSqlNode
 from app.application.agent.nodes.guardrail import GuardrailNode
+from app.application.agent.nodes.hitl_approve import HitlApproveNode
 from app.application.agent.nodes.plan import PlanNode
+from app.application.agent.nodes.repair import RepairNode
 from app.application.agent.nodes.respond import RespondNode
 from app.application.agent.nodes.retrieve import RetrieveContextNode
 from app.application.agent.nodes.understand import UnderstandNode
+from app.application.agent.nodes.verify import VerifyNode
+from app.application.agent.nodes.visualize import VisualizeNode
 from app.domain.ports.catalog import SchemaCatalog
 from app.domain.ports.llm import LLMProvider
 from app.domain.ports.sql import QueryExecutor, SqlValidator
@@ -42,7 +46,7 @@ class NodeFactory:
         d = self._deps
         match name:
             case "understand":
-                return UnderstandNode(d.tracer)
+                return UnderstandNode(d.tracer, d.llm)
             case "retrieve":
                 return RetrieveContextNode(d.tracer, d.catalog, k=d.retrieval_k)
             case "plan":
@@ -51,10 +55,18 @@ class NodeFactory:
                 return GenerateSqlNode(d.tracer, d.llm)
             case "guardrail":
                 return GuardrailNode(d.tracer, d.validator)
+            case "hitl_approve":
+                return HitlApproveNode(d.tracer)
             case "execute":
                 return ExecuteNode(d.tracer, d.executor)
+            case "verify":
+                return VerifyNode(d.tracer)
+            case "repair":
+                return RepairNode(d.tracer)
             case "explain":
                 return ExplainNode(d.tracer, d.llm)
+            case "visualize":
+                return VisualizeNode(d.tracer)
             case "respond":
                 return RespondNode(d.tracer)
             case _:
