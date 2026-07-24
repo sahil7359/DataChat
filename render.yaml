@@ -1,0 +1,44 @@
+# Render Blueprint (infra-as-code). In Render: New → Blueprint → pick this repo.
+# It creates the backend web service on the free plan. Secret values are marked
+# `sync: false` — you paste them in the Render dashboard (they never live in git).
+services:
+  - type: web
+    name: datachat-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /ready
+    autoDeploy: true
+    # Runs DB migrations + seed on each deploy (both idempotent), then serves on
+    # the port Render assigns — so you never run a migration by hand.
+    dockerCommand: sh -c "alembic upgrade head && python -m ingestion.run --dataset seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATACHAT_USE_MOCKS
+        value: "false"
+      - key: DATACHAT_OLLAMA_ENABLED
+        value: "true"
+      - key: DATACHAT_OLLAMA_MODEL
+        value: "llama3.2"
+      - key: DATACHAT_LLM_TIMEOUT_S
+        value: "90"
+      # --- paste these in the dashboard (Environment tab) ---
+      - key: DATACHAT_DATABASE_URL
+        sync: false
+      - key: DATACHAT_EXECUTOR_DATABASE_URL
+        sync: false
+      - key: DATACHAT_EXECUTOR_ROLE_PASSWORD
+        sync: false
+      - key: DATACHAT_REDIS_URL
+        sync: false
+      - key: DATACHAT_OLLAMA_BASE_URL
+        sync: false
+      - key: DATACHAT_OLLAMA_API_KEY
+        sync: false
+      - key: DATACHAT_CORS_ORIGINS
+        sync: false
+      # optional cloud fallback:
+      - key: DATACHAT_GEMINI_API_KEY
+        sync: false
+      - key: DATACHAT_GROQ_API_KEY
+        sync: false
