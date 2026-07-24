@@ -11,11 +11,14 @@ behind the same port, no core changes.
 from __future__ import annotations
 
 import hashlib
+import re
 
 import httpx
 
 from app.domain.results import LLMProviderError
 from app.domain.value_objects import Vector
+
+_TOKEN = re.compile(r"[a-z0-9]+")
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -63,24 +66,21 @@ class GeminiEmbeddingAdapter:
 
 
 class LocalHashEmbeddingProvider:
-    """Deterministic hash-based embedding for offline/dev. Not semantically
-    meaningful, but stable and free — good enough for a tiny curated corpus where
-    top-k >= corpus size returns the whole (relevant) set anyway."""
+    """Feature-hashing bag-of-words embedding for offline/dev (the hashing-trick,
+    à la sklearn's HashingVectorizer). Deterministic, dependency-free, and — unlike
+    hashing the whole string — *lexically meaningful*: texts that share tokens land
+    near each other, so retrieval actually ranks. A real model (e.g. BGE-small)
+    can replace it behind the same port."""
 
     def __init__(self, *, dim: int = 768) -> None:
         self.name = "local-hash-embed"
         self.dim = dim
 
     async def embed(self, text: str) -> Vector:
-        seed = hashlib.sha256(text.encode("utf-8")).digest()
-        values: list[float] = []
-        counter = 0
-        while len(values) < self.dim:
-            block = hashlib.sha256(seed + counter.to_bytes(4, "big")).digest()
-            for i in range(0, len(block), 4):
-                if len(values) >= self.dim:
-                    break
-                n = int.from_bytes(block[i : i + 4], "big")
-                values.append((n / 2**32) * 2.0 - 1.0)
-            counter += 1
+        values = [0.0] * self.dim
+        for token in _TOKEN.findall(text.lower()):
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            index = int.from_bytes(digest[:4], "big") % self.dim
+            sign = 1.0 if digest[4] & 1 else -1.0
+            values[index] += sign
         return Vector.of(values)
