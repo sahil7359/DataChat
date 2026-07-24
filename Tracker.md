@@ -36,9 +36,9 @@
 | Safe error mapping | 8 | Done | exception handlers -> code+message+trace_id; in-stream errors -> safe error event; no stack traces leak; contract tests green | 2026-07-24 |
 | Frontend chat UI + SSE + chart renderer | 9 | Done | Next.js client: typed API + SSE parser, streamed stages, SQL disclosure, results table, vega-embed chart; tsc+eslint+build clean; pnpm audit 0 | 2026-07-24 |
 | HITL UI + cold-start UX + smoke tests | 9 | Done | approve/edit/reject + clarify panels; waking banner; loading/empty/error states; playwright smoke specs (CI) | 2026-07-24 |
-| MLflow tracing (100% coverage) | 10 | To Do | | |
-| Prompt registry + versioning | 10 | To Do | | |
-| Eval harness + scorers + golden set | 10 | To Do | | |
+| MLflow tracing (100% coverage) | 10 | Done | MLflowTracer behind Tracer port; every node (BaseNode) + LLM call (decorator) span-wrapped; best-effort, degrades to no-op offline | 2026-07-24 |
+| Prompt registry + versioning | 10 | Done | PROMPT_VERSIONS catalog (sql_generation/explanation/clarify/faithfulness); versions recorded per run in state+trace | 2026-07-24 |
+| Eval harness + scorers + golden set | 10 | Done | execution_accuracy (result-set equality) + sql_valid + faithfulness (LLM-judge); regression gate; golden set; pytest -m eval writes eval_runs | 2026-07-24 |
 | OWASP LLM Top 10 mitigations + tests | 11 | To Do | | |
 | OWASP Agentic Top 10 mitigations + tests | 11 | To Do | | |
 | Injection corpus + security suite green | 11 | To Do | | |
