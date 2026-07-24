@@ -1,0 +1,40 @@
+"""LangGraph agent state.
+
+A ``TypedDict`` (total=False) so each node returns a partial update that LangGraph
+merges. Domain entities are stored directly — they're frozen dataclasses, so the
+state is immutable-by-parts and serialises cleanly for the checkpointer.
+"""
+
+from __future__ import annotations
+
+from typing import TypedDict
+
+from app.domain.entities import (
+    ExecutionResult,
+    Plan,
+    RetrievedContext,
+    ValidationResult,
+)
+from app.domain.value_objects import ChartSpec
+
+
+class AgentState(TypedDict, total=False):
+    conversation_id: str
+    run_id: str
+    question: str
+
+    retrieved: RetrievedContext | None
+    plan: Plan | None
+    candidate_sql: str | None
+    validation: ValidationResult | None
+    execution: ExecutionResult | None
+    explanation: str | None
+    chart_spec: ChartSpec | None
+
+    error: str | None
+    error_code: str | None
+    stage: str
+    repair_attempts: int
+
+    provider_used: str | None
+    prompt_versions: dict[str, str]
