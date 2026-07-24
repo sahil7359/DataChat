@@ -38,9 +38,15 @@ services:
       context: ./backend
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
-      REDIS_URL: redis://redis:6379/0
-      MLFLOW_TRACKING_URI: http://mlflow:5000
+      # The app reads DATACHAT_-prefixed vars; this block overrides .env so the
+      # container talks to the service hostnames (not localhost) regardless of
+      # what .env holds. Migrations + seed run on boot so `up` is demo-ready.
+      DATACHAT_USE_MOCKS: "true"
+      DATACHAT_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
+      DATACHAT_EXECUTOR_DATABASE_URL: postgresql+asyncpg://datachat_exec:datachat_exec@postgres:5432/${POSTGRES_DB:-datachat}
+      DATACHAT_EXECUTOR_ROLE_PASSWORD: datachat_exec
+      DATACHAT_REDIS_URL: redis://redis:6379/0
+      DATACHAT_MLFLOW_TRACKING_URI: http://mlflow:5000
     ports:
       - "8000:8000"
     depends_on:
@@ -48,7 +54,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && python -m ingestion.run --dataset seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   frontend:
     build:
@@ -62,19 +71,18 @@ services:
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.19.0
+    # Self-contained SQLite store: no extra DB driver needed in the mlflow image,
+    # and it survives restarts via the volume. (Prod uses Neon — see GOLIVE.md.)
     command: >
       mlflow server
       --host 0.0.0.0 --port 5000
-      --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
-      --default-artifact-root /mlartifacts
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
     ports:
       - "5000:5000"
     volumes:
-      - mlartifacts:/mlartifacts
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - mlflow-data:/mlflow
 
 volumes:
   pgdata:
-  mlartifacts:
+  mlflow-data:
