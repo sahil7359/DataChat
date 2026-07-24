@@ -24,6 +24,7 @@ from app.application.agent.nodes.verify import VerifyNode
 from app.application.agent.nodes.visualize import VisualizeNode
 from app.domain.ports.catalog import SchemaCatalog
 from app.domain.ports.llm import LLMProvider
+from app.domain.ports.repositories import AgentActionRepository
 from app.domain.ports.sql import QueryExecutor, SqlValidator
 from app.domain.ports.tracing import Tracer
 
@@ -35,6 +36,7 @@ class NodeDependencies:
     llm: LLMProvider
     validator: SqlValidator
     executor: QueryExecutor
+    audit: AgentActionRepository | None = None
     retrieval_k: int = 8
 
 
@@ -58,7 +60,7 @@ class NodeFactory:
             case "hitl_approve":
                 return HitlApproveNode(d.tracer)
             case "execute":
-                return ExecuteNode(d.tracer, d.executor)
+                return ExecuteNode(d.tracer, d.executor, d.audit)
             case "verify":
                 return VerifyNode(d.tracer)
             case "repair":

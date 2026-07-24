@@ -25,6 +25,7 @@ from app.domain.ports.tracing import Tracer
 from app.domain.value_objects import Provider
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.catalog.pgvector import PgVectorSchemaCatalog
+from app.infrastructure.db.repositories import SqlAgentActionRepository
 from app.infrastructure.db.session import (
     create_app_engine,
     create_executor_engine,
@@ -121,6 +122,7 @@ class Container:
             llm=self.llm(),
             validator=SqlValidatorChain(self._settings.row_cap),
             executor=self.executor(),
+            audit=SqlAgentActionRepository(self._sessionmaker),
             retrieval_k=self._settings.retrieval_k,
         )
 
