@@ -37,6 +37,7 @@ from app.infrastructure.llm.gemini import GeminiAdapter
 from app.infrastructure.llm.groq import GroqAdapter
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.llm.router import ProviderRouter, TaskAwarePolicy
+from app.infrastructure.observability.mlflow_tracer import MLflowTracer
 from app.infrastructure.observability.tracing import NullTracer
 from app.infrastructure.sql.cache import CachingQueryExecutor
 from app.infrastructure.sql.executor import ReadOnlyQueryExecutor
@@ -46,7 +47,11 @@ from app.infrastructure.sql.validator import SqlValidatorChain
 class Container:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._tracer: Tracer = NullTracer()
+        # MLflow tracing in prod; a no-op tracer under mocks. The tracing
+        # *guarantee* comes from BaseNode + the decorator stack, not the backend.
+        self._tracer: Tracer = (
+            NullTracer() if settings.use_mocks else MLflowTracer(settings.mlflow_tracking_uri)
+        )
         self._http = httpx.AsyncClient(timeout=settings.llm_timeout_s)
         self._cache: Cache = RedisCache.from_url(settings.redis_url)
         self._app_engine = create_app_engine(settings)
@@ -121,9 +126,9 @@ class Container:
 
     def query_service(self, checkpointer: BaseCheckpointSaver[Any] | None = None) -> QueryService:
         factory = NodeFactory(self.node_dependencies())
-        graph = GraphBuilder(
-            factory, max_repair_attempts=self._settings.max_repair_attempts
-        ).build(checkpointer)
+        graph = GraphBuilder(factory, max_repair_attempts=self._settings.max_repair_attempts).build(
+            checkpointer
+        )
         return QueryService(graph)
 
     async def aclose(self) -> None:

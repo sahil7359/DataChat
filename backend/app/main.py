@@ -59,10 +59,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 async def _setup(app: FastAPI, settings: Settings) -> None:
+    from app.application.prompts.registry import PROMPT_VERSIONS
     from app.container import Container
     from app.infrastructure.db.repositories import SqlConversationRepository
+    from app.infrastructure.observability.mlflow_tracer import register_prompts
 
     container = Container(settings)
+    if not settings.use_mocks:
+        register_prompts(PROMPT_VERSIONS)
     stack = AsyncExitStack()
     checkpointer = await _build_checkpointer(stack, settings)
 
