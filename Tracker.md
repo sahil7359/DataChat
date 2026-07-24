@@ -39,9 +39,9 @@
 | MLflow tracing (100% coverage) | 10 | Done | MLflowTracer behind Tracer port; every node (BaseNode) + LLM call (decorator) span-wrapped; best-effort, degrades to no-op offline | 2026-07-24 |
 | Prompt registry + versioning | 10 | Done | PROMPT_VERSIONS catalog (sql_generation/explanation/clarify/faithfulness); versions recorded per run in state+trace | 2026-07-24 |
 | Eval harness + scorers + golden set | 10 | Done | execution_accuracy (result-set equality) + sql_valid + faithfulness (LLM-judge); regression gate; golden set; pytest -m eval writes eval_runs | 2026-07-24 |
-| OWASP LLM Top 10 mitigations + tests | 11 | To Do | | |
-| OWASP Agentic Top 10 mitigations + tests | 11 | To Do | | |
-| Injection corpus + security suite green | 11 | To Do | | |
+| OWASP LLM Top 10 mitigations + tests | 11 | Done | LLM01-10 mapped to mitigations + tests; compromised-model-output-can't-write; secret hygiene; bounded consumption | 2026-07-24 |
+| OWASP Agentic Top 10 mitigations + tests | 11 | Done | ASI01-10 mapped; audit outbox (ASI10); non-bypassable HITL (ASI09); no dynamic exec (ASI05); inter-agent out-of-scope (ASI07) | 2026-07-24 |
+| Injection corpus + security suite green | 11 | Done | ~30-entry injection corpus 100% blocked; full security suite green; bandit/gitleaks clean; SECURITY.md matrix | 2026-07-24 |
 | GitHub Actions CI (all gates) | 12 | To Do | | |
 | Observability dashboard | 12 | To Do | | |
 | Deployment prep + keep-warm | 13 | To Do | | |
