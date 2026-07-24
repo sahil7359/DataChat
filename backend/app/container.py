@@ -121,7 +121,9 @@ class Container:
 
     def query_service(self, checkpointer: BaseCheckpointSaver[Any] | None = None) -> QueryService:
         factory = NodeFactory(self.node_dependencies())
-        graph = GraphBuilder(factory).build(checkpointer)
+        graph = GraphBuilder(
+            factory, max_repair_attempts=self._settings.max_repair_attempts
+        ).build(checkpointer)
         return QueryService(graph)
 
     async def aclose(self) -> None:
