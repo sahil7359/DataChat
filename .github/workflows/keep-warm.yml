@@ -1,0 +1,20 @@
+name: Keep warm
+
+# Free-tier keep-warm: ping /ready so Render/Neon don't cold-start on the first
+# real request. A free alternative to cron-job.org. Set the KEEP_WARM_URL repo
+# variable to your deployed backend's /ready URL once live (GOLIVE.md).
+on:
+  schedule:
+    - cron: "*/12 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    if: vars.KEEP_WARM_URL != ''
+    steps:
+      - name: Ping readiness
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${{ vars.KEEP_WARM_URL }}")
+          echo "ready -> $code"
+          test "$code" = "200"
