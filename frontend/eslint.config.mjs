@@ -1,9 +1,11 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
-import next from "eslint-config-next";
 
+// Flat config on ESLint 9. We lint with typescript-eslint's type-checked rules
+// (strict, no `any`, no floating promises) rather than the legacy
+// eslint-config-next, which pulls a patch that is incompatible with flat config.
 export default tseslint.config(
-  { ignores: [".next/**", "node_modules/**"] },
+  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "**/*.mjs", "e2e/**", "playwright.config.ts"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -13,7 +15,7 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
     },
   },
-  ...next.flatConfig ? [next.flatConfig] : [],
 );
