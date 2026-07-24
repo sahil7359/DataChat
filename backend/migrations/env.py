@@ -8,7 +8,9 @@ security-critical roles/grants are hand-written migrations (Schema §8). The
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Iterable
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import Connection, pool
@@ -19,6 +21,10 @@ from app.infrastructure.db import models  # noqa: F401  (registers tables on the
 from app.infrastructure.db.base import APP_SCHEMA, Base
 
 config = context.config
+# Wire up Alembic's logging so "Running upgrade ..." lines actually appear.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+_log = logging.getLogger("alembic.env")
 target_metadata = Base.metadata
 
 
@@ -63,6 +69,17 @@ def _do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online() -> None:
+    from alembic.script import ScriptDirectory
+
+    heads = ScriptDirectory.from_config(config).get_heads()
+    host = _url().rsplit("@", 1)[-1]  # host/db only — never the credentials
+    _log.info("applying migrations: heads=%s target=%s", heads, host)
+    if not heads:
+        raise RuntimeError(
+            "Alembic found no migration scripts — the migrations/versions files are "
+            "missing from the image (rebuild with `docker compose build --no-cache`)."
+        )
+
     section = config.get_section(config.config_ini_section) or {}
     section["sqlalchemy.url"] = _url()
     engine = async_engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
