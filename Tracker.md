@@ -44,8 +44,8 @@
 | Injection corpus + security suite green | 11 | Done | ~30-entry injection corpus 100% blocked; full security suite green; bandit/gitleaks clean; SECURITY.md matrix | 2026-07-24 |
 | GitHub Actions CI (all gates) | 12 | Done | ci.yml: backend(lint/type/import-linter/test+cov/eval/bandit/pip-audit w/ pg+redis) + frontend(lint/tsc/build/pnpm audit) + gitleaks/semgrep + docker image build | 2026-07-24 |
 | Observability dashboard | 12 | Done | in-process Metrics + /metrics (prometheus) + /api/v1/metrics (json); request+cache-hit counters, live breaker states; frontend /dashboard page | 2026-07-24 |
-| Deployment prep + keep-warm | 13 | To Do | | |
-| GOLIVE.md + final security report + handback | 13 | To Do | | |
+| Deployment prep + keep-warm | 13 | Done | prod Dockerfiles (non-root) + .dockerignore; scripts/keep_warm.py + purge_old_turns.py; keep-warm cron workflow; /ready wired | 2026-07-24 |
+| GOLIVE.md + final security report + handback | 13 | Done | GOLIVE.md ordered action items; SECURITY.md OWASP matrix; final scans clean (pip-audit/pnpm audit 0, gitleaks history clean, bandit 0); tagged v1.0.0 | 2026-07-24 |
 
 ## Verified versions (Claude Code fills at build time)
 
