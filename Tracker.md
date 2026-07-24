@@ -28,10 +28,10 @@
 | Agent state + BaseNode (Template Method) | 6 | Done | AgentState TypedDict; BaseNode span->run->validate-output; untrusted LLM output checked in-node | 2026-07-24 |
 | MVP nodes + GraphBuilder + checkpointer | 6 | Done | understand..respond; StateGraph + guardrail/execute branches; MemorySaver in tests, PostgresSaver in prod | 2026-07-24 |
 | NodeFactory + composition root (DI) | 6 | Done | NodeFactory by name; container.py wires mock/real adapters; end-to-end test with fakes (no DB/keys) | 2026-07-24 |
-| HITL approve/clarify (interrupt + resume) | 7 | To Do | | |
-| Verify + bounded repair loop | 7 | To Do | | |
-| Visualize node (Vega-Lite spec) | 7 | To Do | | |
-| SSE streaming + event types | 7 | To Do | | |
+| HITL approve/clarify (interrupt + resume) | 7 | Done | langgraph interrupt() before execute + in understand; durable resume via Command; edit=approval; server-side non-bypassable (ASI09) | 2026-07-24 |
+| Verify + bounded repair loop | 7 | Done | verify plausibility; repair feeds DB error back to generate; hard-capped at MAX_REPAIR (ASI08) | 2026-07-24 |
+| Visualize node (Vega-Lite spec) | 7 | Done | declarative Vega-Lite built from rows + structural validation; never code (LLM05/ASI05) | 2026-07-24 |
+| SSE streaming + event types | 7 | Done | QueryService.stream/resume over graph.astream; status/plan/sql/rows/explanation_delta/chart_spec/awaiting_approval/error/done | 2026-07-24 |
 | BFF routers + middleware (rate-limit, idempotency) | 8 | To Do | | |
 | Safe error mapping | 8 | To Do | | |
 | Frontend chat UI + SSE + chart renderer | 9 | To Do | | |
