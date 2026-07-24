@@ -153,3 +153,11 @@ class AllProvidersUnavailableError(DataChatError):
 
 class QuotaExceededError(DataChatError):
     """A rate limit or global daily quota was hit (LLM10 bounded consumption)."""
+
+
+class LLMOutputError(DataChatError):
+    """Untrusted LLM output failed a node's output-validation hook (LLM05)."""
+
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(f"{field}: {message}")
+        self.field = field
