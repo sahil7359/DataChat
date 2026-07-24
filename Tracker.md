@@ -34,8 +34,8 @@
 | SSE streaming + event types | 7 | Done | QueryService.stream/resume over graph.astream; status/plan/sql/rows/explanation_delta/chart_spec/awaiting_approval/error/done | 2026-07-24 |
 | BFF routers + middleware (rate-limit, idempotency) | 8 | Done | /chat SSE, /resume, /conversations, /datasets, /health, /ready; request-id + structlog; per-IP+global rate limit; idempotency-key dedupe; CORS | 2026-07-24 |
 | Safe error mapping | 8 | Done | exception handlers -> code+message+trace_id; in-stream errors -> safe error event; no stack traces leak; contract tests green | 2026-07-24 |
-| Frontend chat UI + SSE + chart renderer | 9 | To Do | | |
-| HITL UI + cold-start UX + smoke tests | 9 | To Do | | |
+| Frontend chat UI + SSE + chart renderer | 9 | Done | Next.js client: typed API + SSE parser, streamed stages, SQL disclosure, results table, vega-embed chart; tsc+eslint+build clean; pnpm audit 0 | 2026-07-24 |
+| HITL UI + cold-start UX + smoke tests | 9 | Done | approve/edit/reject + clarify panels; waking banner; loading/empty/error states; playwright smoke specs (CI) | 2026-07-24 |
 | MLflow tracing (100% coverage) | 10 | To Do | | |
 | Prompt registry + versioning | 10 | To Do | | |
 | Eval harness + scorers + golden set | 10 | To Do | | |
