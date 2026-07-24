@@ -40,6 +40,19 @@ export async function fetchDatasets(): Promise<Dataset[]> {
   return (await resp.json()) as Dataset[];
 }
 
+export interface MetricsSnapshot {
+  counters: Record<string, number>;
+  gauges: Record<string, number>;
+  cache_hit_rate: number;
+  breakers: Record<string, string>;
+}
+
+export async function fetchMetrics(): Promise<MetricsSnapshot> {
+  const resp = await fetch(`${BASE}/metrics`);
+  if (!resp.ok) throw new Error(`metrics request failed: ${resp.status}`);
+  return (await resp.json()) as MetricsSnapshot;
+}
+
 async function* readStream(resp: Response): AsyncGenerator<AgentEvent> {
   if (!resp.ok || !resp.body) {
     throw new Error(`chat request failed: ${resp.status}`);
