@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: datachat
+          POSTGRES_PASSWORD: datachat
+          POSTGRES_DB: datachat
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U datachat"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATACHAT_TEST_DATABASE_URL: postgresql+asyncpg://datachat:datachat@localhost:5432/datachat
+      DATACHAT_DATABASE_URL: postgresql+asyncpg://datachat:datachat@localhost:5432/datachat
+      DATACHAT_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --all-extras
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Import boundaries
+        run: uv run lint-imports
+      - name: Type check
+        run: uv run mypy .
+      - name: Unit + integration + security (coverage)
+        run: uv run pytest -m "not eval" --cov --cov-report=xml --cov-report=term
+      - name: Eval (golden set regression gate)
+        run: uv run pytest -m eval
+      - name: SAST (bandit)
+        run: uv run bandit -q -r app ingestion -c pyproject.toml
+      - name: Dependency audit
+        run: uv run pip-audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run build
+      - run: pnpm audit --prod
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: SAST (semgrep)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
+
+  images:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t datachat-backend ./backend
+      - name: Build frontend image
+        run: docker build -t datachat-frontend ./frontend
