@@ -38,15 +38,21 @@ services:
       context: ./backend
     env_file: .env
     environment:
-      # The app reads DATACHAT_-prefixed vars; this block overrides .env so the
-      # container talks to the service hostnames (not localhost) regardless of
-      # what .env holds. Migrations + seed run on boot so `up` is demo-ready.
-      DATACHAT_USE_MOCKS: "true"
+      # DB/Redis/MLflow must point at the service hostnames, so they're pinned.
+      # USE_MOCKS + Ollama come from .env (interpolated) and default to the
+      # keyless mock path; set them in .env to run your local Ollama instead.
+      DATACHAT_USE_MOCKS: "${DATACHAT_USE_MOCKS:-true}"
+      DATACHAT_OLLAMA_ENABLED: "${DATACHAT_OLLAMA_ENABLED:-false}"
+      DATACHAT_OLLAMA_BASE_URL: "${DATACHAT_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}"
+      DATACHAT_OLLAMA_API_KEY: "${DATACHAT_OLLAMA_API_KEY:-}"
+      DATACHAT_OLLAMA_MODEL: "${DATACHAT_OLLAMA_MODEL:-llama3.2}"
       DATACHAT_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
       DATACHAT_EXECUTOR_DATABASE_URL: postgresql+asyncpg://datachat_exec:datachat_exec@postgres:5432/${POSTGRES_DB:-datachat}
       DATACHAT_EXECUTOR_ROLE_PASSWORD: datachat_exec
       DATACHAT_REDIS_URL: redis://redis:6379/0
       DATACHAT_MLFLOW_TRACKING_URI: http://mlflow:5000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:

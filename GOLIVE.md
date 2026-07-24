@@ -9,6 +9,22 @@ permanent free tier.
 > Env var convention: the app reads settings with the `DATACHAT_` prefix
 > (e.g. `DATACHAT_GEMINI_API_KEY`). `.env.example` documents every variable.
 
+**Where things run (multi-service topology):**
+
+| Service | Host | Notes |
+|---|---|---|
+| Frontend | Vercel (free) | thin streaming UI |
+| Backend (BFF + agent) | Render (free) | the request path |
+| **AI (Ollama)** | **your PC's GPU** | a separate, **secured** service via a token-gated tunnel |
+| Postgres + pgvector | Neon (free) | app + analytics schemas |
+| Redis | Upstash (free) | cache, rate-limit, breaker state |
+| MLflow | HF Space (free) | traces + prompt registry |
+| Ingestion / Eval | GitHub Actions / CLI | offline jobs, not always-on |
+
+The AI being its own network-boundary service (Ollama) *is* the microservice
+extraction of the LLM gateway — swappable and independently secured, without
+splitting the synchronous request path.
+
 ---
 
 ## 0. Run it locally first (no accounts, ~5 min)
@@ -27,14 +43,62 @@ You now have a working demo on mocks. The rest wires real services.
 
 ---
 
-## 1. LLM keys (free)
+## 1. AI — your Ollama on your PC (primary), fronted by a secured tunnel
 
-1. **Gemini** — https://aistudio.google.com/app/apikey → *Create API key*.
-   → `DATACHAT_GEMINI_API_KEY=<key>`
-2. **Groq** — https://console.groq.com/keys → *Create API Key*.
-   → `DATACHAT_GROQ_API_KEY=<key>`
-3. Flip to real models: `DATACHAT_USE_MOCKS=false`.
-   (OpenRouter stays off — `DATACHAT_OPENROUTER_ENABLED=false` — to remain $0.)
+The AI runs on **your machine's GPU** (a separate "AI service" the online backend
+calls over the network). The online backend reaches it through a **Cloudflare
+tunnel protected by a bearer token**, so no one who finds the URL can abuse your
+GPU. Optionally add Gemini/Groq as an automatic fallback (see step 1c).
+
+**1a. Run Ollama locally**
+```bash
+# install from https://ollama.com, then:
+ollama pull llama3.2          # small, fits an 8 GB 2060; or qwen2.5:3b / phi3.5
+ollama serve                  # serves the OpenAI-compatible API on :11434
+```
+
+**1b. Expose it securely with a Cloudflare tunnel + a token**
+The endpoint must require a secret so only your backend can use it. Easiest path:
+put a tiny auth proxy in front of Ollama and tunnel that.
+```bash
+# terminal 1 — auth proxy that requires  Authorization: Bearer <YOUR_SECRET>
+#   (use Caddy, or `cloudflared` + Cloudflare Access service token, or nginx).
+# Example with Caddy (Caddyfile):
+#   :11435 {
+#     @noauth not header Authorization "Bearer YOUR_LONG_RANDOM_SECRET"
+#     respond @noauth 401
+#     reverse_proxy localhost:11434
+#   }
+caddy run
+
+# terminal 2 — tunnel the proxy port to a public HTTPS URL
+cloudflared tunnel --url http://localhost:11435
+# note the https://<random>.trycloudflare.com URL (or map a named tunnel to a domain)
+```
+Then set on the **online backend** (step 5):
+```
+DATACHAT_USE_MOCKS=false
+DATACHAT_OLLAMA_ENABLED=true
+DATACHAT_OLLAMA_BASE_URL=https://<your-tunnel-host>/v1
+DATACHAT_OLLAMA_API_KEY=YOUR_LONG_RANDOM_SECRET   # must match the proxy
+DATACHAT_OLLAMA_MODEL=llama3.2
+DATACHAT_LLM_TIMEOUT_S=90                          # give the GPU headroom
+```
+The backend's own per-IP rate limit + global daily quota add a second layer, so
+even authorized traffic can't hammer your GPU.
+
+**1c. (Optional) cloud fallback — recommended**
+If Ollama ever OOMs or reloads a model, the circuit breaker trips and the demo
+keeps answering on free cloud tiers:
+- **Gemini** — https://aistudio.google.com/app/apikey → `DATACHAT_GEMINI_API_KEY=<key>`
+- **Groq** — https://console.groq.com/keys → `DATACHAT_GROQ_API_KEY=<key>`
+
+Leave these unset to run **Ollama-only**. (OpenRouter stays off —
+`DATACHAT_OPENROUTER_ENABLED=false` — to remain $0.)
+
+> **Local dev with Ollama (no tunnel):** set `DATACHAT_OLLAMA_ENABLED=true` and
+> `DATACHAT_OLLAMA_BASE_URL=http://host.docker.internal:11434/v1` (from a container)
+> or `http://localhost:11434/v1` (bare uvicorn), and `DATACHAT_USE_MOCKS=false`.
 
 ## 2. Database — Neon (free, Postgres 16 + pgvector)
 
@@ -96,7 +160,8 @@ You now have a working demo on mocks. The rest wires real services.
 
 ## Final checklist
 
-- [ ] `USE_MOCKS=false` and both LLM keys set
+- [ ] `DATACHAT_USE_MOCKS=false`; Ollama running + tunnel up + `DATACHAT_OLLAMA_*` set on the backend (token matches the proxy)
+- [ ] (optional) Gemini/Groq keys set as fallback
 - [ ] `alembic upgrade head` run against Neon (roles + pgvector created)
 - [ ] seed (or wdi/owid) ingested
 - [ ] backend live on Render, `/ready` returns 200
