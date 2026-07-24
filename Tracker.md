@@ -20,9 +20,9 @@
 | CircuitBreaker + Redis shared state | 3 | Done | CLOSED/OPEN/HALF_OPEN via Cache port; injected clock; per-provider; transition tests | 2026-07-23 |
 | ProviderRouter (Strategy) + fallback | 3 | Done | task+health-aware order; Gemini->Groq failover test; OCP add-provider test | 2026-07-23 |
 | EmbeddingProvider | 3 | Done | Gemini embed adapter + deterministic local-hash offline path | 2026-07-23 |
-| Ingestion pipeline (CoR) + connectors | 4 | To Do | | |
-| SchemaCatalog pgvector retrieval | 4 | To Do | | |
-| Seed fixtures + golden inputs | 4 | To Do | | |
+| Ingestion pipeline (CoR) + connectors | 4 | Done | CoR steps (fetch->validate+checksum->load->embed->version), idempotent; seed/WDI/OWID connectors | 2026-07-24 |
+| SchemaCatalog pgvector retrieval | 4 | Done | pgvector catalog (cosine top-k) + offline in-memory catalog; retrieval tests green | 2026-07-24 |
+| Seed fixtures + golden inputs | 4 | Done | curated 15-country seed + few-shot + eval examples in definitions; loads via --dataset seed | 2026-07-24 |
 | SQL guardrail chain (sqlglot) | 5 | To Do | | |
 | Read-only QueryExecutor (Bulkhead) + cache | 5 | To Do | | |
 | Agent state + BaseNode (Template Method) | 6 | To Do | | |
