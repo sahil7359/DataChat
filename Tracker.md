@@ -42,8 +42,8 @@
 | OWASP LLM Top 10 mitigations + tests | 11 | Done | LLM01-10 mapped to mitigations + tests; compromised-model-output-can't-write; secret hygiene; bounded consumption | 2026-07-24 |
 | OWASP Agentic Top 10 mitigations + tests | 11 | Done | ASI01-10 mapped; audit outbox (ASI10); non-bypassable HITL (ASI09); no dynamic exec (ASI05); inter-agent out-of-scope (ASI07) | 2026-07-24 |
 | Injection corpus + security suite green | 11 | Done | ~30-entry injection corpus 100% blocked; full security suite green; bandit/gitleaks clean; SECURITY.md matrix | 2026-07-24 |
-| GitHub Actions CI (all gates) | 12 | To Do | | |
-| Observability dashboard | 12 | To Do | | |
+| GitHub Actions CI (all gates) | 12 | Done | ci.yml: backend(lint/type/import-linter/test+cov/eval/bandit/pip-audit w/ pg+redis) + frontend(lint/tsc/build/pnpm audit) + gitleaks/semgrep + docker image build | 2026-07-24 |
+| Observability dashboard | 12 | Done | in-process Metrics + /metrics (prometheus) + /api/v1/metrics (json); request+cache-hit counters, live breaker states; frontend /dashboard page | 2026-07-24 |
 | Deployment prep + keep-warm | 13 | To Do | | |
 | GOLIVE.md + final security report + handback | 13 | To Do | | |
 
