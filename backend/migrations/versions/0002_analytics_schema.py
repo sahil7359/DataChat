@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
+from app.infrastructure.db import models  # noqa: F401  (registers tables on the metadata)
 from app.infrastructure.db.base import ANALYTICS_SCHEMA, Base
 
 revision: str = "0002_analytics_schema"

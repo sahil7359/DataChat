@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
+from app.infrastructure.db import models  # noqa: F401  (registers tables on the metadata)
 from app.infrastructure.db.base import APP_SCHEMA, Base
 
 revision: str = "0001_app_schema"
@@ -29,7 +30,10 @@ def upgrade() -> None:
     bind = op.get_bind()
     op.execute(f"CREATE SCHEMA IF NOT EXISTS {APP_SCHEMA}")
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    Base.metadata.create_all(bind=bind, tables=_app_tables())
+    tables = _app_tables()
+    if not tables:  # fail loudly rather than silently stamping an empty migration
+        raise RuntimeError("app-schema models are not registered on the metadata")
+    Base.metadata.create_all(bind=bind, tables=tables)
     # HNSW cosine indexes for the embedding columns (Schema §6). Declared here
     # rather than on the model because the index method is Postgres/pgvector
     # specific and not part of the portable ORM contract.
