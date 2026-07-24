@@ -54,8 +54,13 @@ def run_migrations_offline() -> None:
 
 def _do_run_migrations(connection: Connection) -> None:
     # The version table lives in the app schema, so it must exist before Alembic
-    # touches it (the first migration also creates it, idempotently).
+    # touches it (the first migration also creates it, idempotently). Commit that
+    # schema creation on its own so the connection is NOT mid-transaction when
+    # Alembic starts — otherwise Alembic doesn't own/commit its transaction and
+    # every migration silently rolls back on connection close.
     connection.exec_driver_sql(f"CREATE SCHEMA IF NOT EXISTS {APP_SCHEMA}")
+    if connection.in_transaction():
+        connection.commit()
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
