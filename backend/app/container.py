@@ -25,7 +25,11 @@ from app.domain.ports.tracing import Tracer
 from app.domain.value_objects import Provider
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.catalog.pgvector import PgVectorSchemaCatalog
-from app.infrastructure.db.repositories import SqlAgentActionRepository
+from app.infrastructure.db.repositories import (
+    SqlAgentActionRepository,
+    SqlConversationRepository,
+    SqlRunRepository,
+)
 from app.infrastructure.db.session import (
     create_app_engine,
     create_executor_engine,
@@ -151,7 +155,11 @@ class Container:
         graph = GraphBuilder(factory, max_repair_attempts=self._settings.max_repair_attempts).build(
             checkpointer
         )
-        return QueryService(graph)
+        return QueryService(
+            graph,
+            conversations=SqlConversationRepository(self._sessionmaker),
+            runs=SqlRunRepository(self._sessionmaker),
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()
