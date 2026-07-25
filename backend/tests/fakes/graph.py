@@ -9,6 +9,7 @@ from app.application.agent.graph import GraphBuilder
 from app.application.agent.node_factory import NodeDependencies, NodeFactory
 from app.application.services.query_service import QueryService
 from app.domain.entities import ExecutionResult
+from app.domain.ports.cache import Cache
 from app.domain.ports.llm import LLMProvider
 from app.domain.ports.repositories import AgentActionRepository
 from app.domain.ports.sql import QueryExecutor
@@ -31,6 +32,7 @@ def build_service(
     llm: LLMProvider | None = None,
     executor: QueryExecutor | None = None,
     audit: AgentActionRepository | None = None,
+    answer_cache: Cache | None = None,
     max_repair: int = 2,
 ) -> QueryService:
     deps = NodeDependencies(
@@ -42,5 +44,6 @@ def build_service(
         audit=audit,
     )
     return QueryService(
-        GraphBuilder(NodeFactory(deps), max_repair_attempts=max_repair).build(MemorySaver())
+        GraphBuilder(NodeFactory(deps), max_repair_attempts=max_repair).build(MemorySaver()),
+        answer_cache=answer_cache,
     )

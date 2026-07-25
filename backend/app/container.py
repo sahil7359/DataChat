@@ -159,6 +159,8 @@ class Container:
             graph,
             conversations=SqlConversationRepository(self._sessionmaker),
             runs=SqlRunRepository(self._sessionmaker),
+            answer_cache=self._cache,
+            answer_cache_ttl_s=self._settings.answer_cache_ttl_s,
         )
 
     async def aclose(self) -> None:

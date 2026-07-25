@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     statement_timeout_ms: int = 5000
     llm_timeout_s: float = 30.0
     retrieval_k: int = 8
+    # Whole-answer cache TTL: repeat questions replay a stored answer for this long.
+    answer_cache_ttl_s: int = 3600
 
     # --- HITL ------------------------------------------------------------
     approve_sql_default: bool = False

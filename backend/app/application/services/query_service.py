@@ -31,9 +31,15 @@ from app.application.agent.events import (
     StatusEvent,
 )
 from app.application.agent.state import AgentState
+from app.application.services.answer_cache import (
+    answer_cache_key,
+    deserialize_answer,
+    serialize_answer,
+)
 from app.domain.entities import Conversation
+from app.domain.ports.cache import Cache
 from app.domain.ports.repositories import ConversationRepository, RunRepository
-from app.domain.value_objects import ConversationId, RunId, new_uuid
+from app.domain.value_objects import AgentStage, ConversationId, RunId, new_uuid
 
 _SAFE_MESSAGES = {
     "guardrail_blocked": "I couldn't produce a safe query for that question.",
@@ -51,6 +57,8 @@ class QueryService:
         *,
         conversations: ConversationRepository | None = None,
         runs: RunRepository | None = None,
+        answer_cache: Cache | None = None,
+        answer_cache_ttl_s: int = 3600,
     ) -> None:
         self._graph = graph
         # Optional run/conversation persistence. When wired, a run row is recorded
@@ -58,6 +66,10 @@ class QueryService:
         # parent to reference; the final status is written back afterwards.
         self._conversations = conversations
         self._runs = runs
+        # Optional whole-answer cache: replays a prior answer for the same question
+        # instead of re-running the LLM chain.
+        self._answer_cache = answer_cache
+        self._answer_cache_ttl = answer_cache_ttl_s
 
     async def run(self, question: str, conversation_id: str | None = None) -> AgentState:
         run_id = new_uuid()
@@ -78,6 +90,17 @@ class QueryService:
         run_id = run_id or new_uuid()
         cid = conversation_id or new_uuid()
         config = {"configurable": {"thread_id": run_id}}
+        key = answer_cache_key(question)
+        # A prior answer to the same question replays instantly. Skip the cache for
+        # the HITL approval flow, which must actually run the graph to interrupt.
+        if self._answer_cache is not None and not approve_sql:
+            cached = await self._answer_cache.get(key)
+            if cached is not None:
+                async for event in self._replay_cached(
+                    run_id, cid, conversation_id, question, cached
+                ):
+                    yield event
+                return
         await self._begin_run(run_id, cid, conversation_id, question)
         initial = _initial_state(question, cid, run_id, approve_sql=approve_sql)
         try:
@@ -85,6 +108,7 @@ class QueryService:
                 self._graph.astream(initial, config=config, stream_mode="updates"), run_id, config
             ):
                 yield event
+            await self._store_answer(key, config)
         finally:
             await self._finish_run(run_id, config)
 
@@ -120,6 +144,31 @@ class QueryService:
             snapshot = await self._graph.aget_state(config)
             for event in _final_events(snapshot.values, run_id):
                 yield event
+
+    async def _replay_cached(
+        self, run_id: str, cid: str, provided_cid: str | None, question: str, cached: bytes
+    ) -> AsyncIterator[AgentEvent]:
+        # Still record the run/conversation so history and the audit dashboard stay
+        # consistent, then replay the stored answer through the normal event mapping.
+        await self._begin_run(run_id, cid, provided_cid, question)
+        for event in _events_for(deserialize_answer(cached)):
+            yield event
+        yield StatusEvent(stage=AgentStage.DONE.value)
+        yield DoneEvent(run_id=run_id)
+        if self._runs is not None:
+            with suppress(Exception):
+                await self._runs.record_status(RunId(run_id), "done")
+
+    async def _store_answer(self, key: str, config: dict[str, Any]) -> None:
+        if self._answer_cache is None:
+            return
+        with suppress(Exception):
+            snapshot = await self._graph.aget_state(config)
+            if snapshot.next:  # paused at a HITL interrupt — nothing final to cache
+                return
+            payload = serialize_answer(snapshot.values)
+            if payload is not None:
+                await self._answer_cache.set(key, payload, self._answer_cache_ttl)
 
     async def _begin_run(
         self, run_id: str, cid: str, provided_cid: str | None, question: str
