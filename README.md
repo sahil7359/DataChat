@@ -39,11 +39,14 @@ Public open datasets are rich but locked behind SQL and BI tools. Most "text-to-
 - **Safe by construction** — generated SQL passes an AST guardrail chain *and* runs on a read-only, least-privilege DB role with timeouts. No write path exists.
 - **Grounded (RAG-to-SQL)** — a semantic layer (schema docs, synonyms, few-shot examples) is retrieved via pgvector so the model doesn't invent columns.
 - **Human-in-the-loop** — approve or edit the SQL before it runs; durable state means the pause survives reloads and cold starts.
-- **Resilient on free tiers** — provider abstraction with circuit breaker + automatic Gemini→Groq fallback.
+- **Your GPU is the AI** — a self-hosted **Ollama** model (behind a token-guarded tunnel) is the primary provider, with **Gemini→Groq** as automatic circuit-breaker fallback. Private, free, and swappable.
+- **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question (measured ~20–40s → ~70ms) with zero false-positive risk (exact-match, never fuzzy).
+- **Downloadable reports & data** — every answer can be exported as a Markdown report (question, summary, SQL, table, and links to the source datasets) or a CSV of the result set.
+- **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web-search fallback replies from the web *with citations*, clearly labelled and kept entirely out of the SQL path.
 - **Evaluated** — execution-accuracy golden set gates every change in CI (the same idea behind the BIRD benchmark).
 - **Observable** — every run and model call traced in MLflow, with a versioned prompt registry.
 - **Streaming UI** — watch the agent think; results render as a chart from a backend-emitted Vega-Lite spec.
-- **$0/month** — every component runs on a permanent free tier or OSS.
+- **$0/month** — every component runs on a permanent free tier or your own hardware.
 
 ## Architecture
 
@@ -52,13 +55,14 @@ A **modular monolith with microservice-grade boundaries** — clean architecture
 ```mermaid
 flowchart LR
   UI["Next.js UI<br/>(Vercel)"] -->|SSE| BFF["FastAPI BFF<br/>rate-limit · stream"]
-  BFF --> AGENT["LangGraph agent<br/>plan→SQL→guardrail→verify→explain"]
+  BFF --> AGENT["LangGraph agent<br/>plan→SQL→guardrail→verify→explain→(web fallback)"]
   AGENT --> SEM["Semantic layer<br/>(pgvector RAG)"]
   AGENT --> GUARD["SQL guardrail +<br/>read-only executor"]
-  AGENT --> LLM["Provider gateway<br/>Gemini ⇄ Groq (circuit breaker)"]
+  AGENT --> LLM["Provider gateway<br/>Ollama (your GPU) → Gemini/Groq"]
+  LLM -.->|token-guarded tunnel| OLL["Ollama on your PC<br/>(Cloudflare + Caddy auth)"]
   GUARD -->|read-only role| PG[("Postgres + pgvector<br/>Neon")]
   SEM --> PG
-  BFF --> REDIS[("Redis<br/>Upstash")]
+  BFF --> REDIS[("Redis · Upstash<br/>rate-limit · answer cache")]
   AGENT -. traces .-> MLF["MLflow"]
 ```
 
@@ -70,7 +74,7 @@ The differentiators — the **agentic LangGraph core**, the **guardrail + read-o
 |---|---|---|
 | Agent | LangGraph 1.2 | Durable state, checkpoints, HITL interrupts, subgraphs |
 | Backend | FastAPI + Pydantic v2 + SQLAlchemy 2 (async) | Typed, async, boundary validation as a control |
-| LLMs | Gemini (primary) + Groq (fallback), pluggable | Provider abstraction + circuit breaker; strictly free |
+| LLMs | Ollama (self-hosted, primary) + Gemini/Groq fallback, pluggable | Provider abstraction + circuit breaker; private GPU, strictly free |
 | Data / vectors | Postgres + pgvector (Neon) | One system for relational data *and* embeddings |
 | Cache / limits | Redis (Upstash) | Result cache, rate limiting, breaker state |
 | LLMOps | MLflow 3.14 | Tracing, prompt registry, evaluation, CI gate |
@@ -117,6 +121,20 @@ To use real models later, set `USE_MOCKS=false` and add keys — see **[GOLIVE.m
 - **Safety as architecture:** an AST guardrail chain plus a read-only least-privilege role means no unsafe SQL can execute even if a layer is bypassed.
 - **Evaluation you can trust:** execution-accuracy scoring (result-set equality) gates regressions in CI.
 - **Durable agent state:** LangGraph checkpoints let a human-in-the-loop pause survive reloads and cold starts.
+
+## Evaluation results
+
+Measured on the golden set (result-set-equality scoring, BIRD-style) with the
+self-hosted **`qwen2.5:7b-instruct`** model — reproduce with `make eval`:
+
+| Metric | Score | What it means |
+|---|---:|---|
+| Execution accuracy | **0.80** | Agent's result set equals the gold query's, exactly |
+| SQL valid rate | **1.00** | Generated SQL parses and passes the AST guardrail |
+| Guardrail pass rate | **1.00** | No generated query was unsafe |
+| Explanation faithfulness | **1.00** | Prose is grounded in the returned rows (LLM judge) |
+
+<sub>Small golden set; a bigger model (or the Gemini fallback) scores higher. The one miss returned country *names* where the gold used ISO codes — a strict-equality miss, not a wrong answer.</sub>
 
 ## Testing, observability & security
 
