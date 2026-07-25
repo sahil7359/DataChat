@@ -18,6 +18,7 @@ export interface TurnState {
   chart: Record<string, unknown> | null;
   awaiting: AwaitingApprovalEvent | null;
   error: { code: string; message: string } | null;
+  runId: string | null;
 }
 
 const INITIAL: TurnState = {
@@ -33,6 +34,7 @@ const INITIAL: TurnState = {
   chart: null,
   awaiting: null,
   error: null,
+  runId: null,
 };
 
 function reduce(state: TurnState, event: AgentEvent): TurnState {
@@ -51,11 +53,11 @@ function reduce(state: TurnState, event: AgentEvent): TurnState {
     case "chart_spec":
       return { ...base, chart: event.spec };
     case "awaiting_approval":
-      return { ...base, awaiting: event };
+      return { ...base, awaiting: event, runId: event.run_id };
     case "error":
       return { ...base, error: { code: event.code, message: event.message } };
     case "done":
-      return { ...base, done: true, active: false };
+      return { ...base, done: true, active: false, runId: event.run_id || state.runId };
     default:
       return base;
   }

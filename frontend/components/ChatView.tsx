@@ -6,7 +6,7 @@ import { ApprovalPanel } from "@/components/ApprovalPanel";
 import { ChartRenderer } from "@/components/ChartRenderer";
 import { ResultsTable } from "@/components/ResultsTable";
 import { useChat } from "@/hooks/useChat";
-import { fetchDatasets } from "@/lib/api";
+import { fetchDatasets, reportCsvUrl, reportMarkdownUrl } from "@/lib/api";
 import type { Dataset } from "@/lib/types";
 
 export function ChatView() {
@@ -112,6 +112,25 @@ function TurnView({
       {state.chart && <ChartRenderer spec={state.chart} />}
 
       {state.explanation && <p className="text-sm leading-relaxed">{state.explanation}</p>}
+
+      {state.done && state.rows && state.runId && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          <a
+            href={reportMarkdownUrl(state.runId)}
+            download
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 hover:bg-white/10"
+          >
+            ⬇ Download report
+          </a>
+          <a
+            href={reportCsvUrl(state.runId)}
+            download
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 hover:bg-white/10"
+          >
+            ⬇ Download data (CSV)
+          </a>
+        </div>
+      )}
 
       {state.error && (
         <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-3 text-sm">

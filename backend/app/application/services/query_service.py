@@ -34,6 +34,7 @@ from app.application.agent.state import AgentState
 from app.application.services.answer_cache import (
     answer_cache_key,
     deserialize_answer,
+    report_cache_key,
     serialize_answer,
 )
 from app.domain.entities import Conversation
@@ -108,7 +109,7 @@ class QueryService:
                 self._graph.astream(initial, config=config, stream_mode="updates"), run_id, config
             ):
                 yield event
-            await self._store_answer(key, config)
+            await self._store_answer(key, run_id, config)
         finally:
             await self._finish_run(run_id, config)
 
@@ -155,11 +156,17 @@ class QueryService:
             yield event
         yield StatusEvent(stage=AgentStage.DONE.value)
         yield DoneEvent(run_id=run_id)
+        # This run reused a prior answer, but it still gets its own downloadable report.
+        if self._answer_cache is not None:
+            with suppress(Exception):
+                await self._answer_cache.set(
+                    report_cache_key(run_id), cached, self._answer_cache_ttl
+                )
         if self._runs is not None:
             with suppress(Exception):
                 await self._runs.record_status(RunId(run_id), "done")
 
-    async def _store_answer(self, key: str, config: dict[str, Any]) -> None:
+    async def _store_answer(self, key: str, run_id: str, config: dict[str, Any]) -> None:
         if self._answer_cache is None:
             return
         with suppress(Exception):
@@ -169,6 +176,10 @@ class QueryService:
             payload = serialize_answer(snapshot.values)
             if payload is not None:
                 await self._answer_cache.set(key, payload, self._answer_cache_ttl)
+                # Same payload, keyed by run so it can be downloaded as a report/CSV.
+                await self._answer_cache.set(
+                    report_cache_key(run_id), payload, self._answer_cache_ttl
+                )
 
     async def _begin_run(
         self, run_id: str, cid: str, provided_cid: str | None, question: str

@@ -3,6 +3,10 @@ import type { AgentEvent, Dataset, Decision } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
 
+/** Download links for a finished run's report and result data. */
+export const reportMarkdownUrl = (runId: string) => `${BASE}/runs/${runId}/report.md`;
+export const reportCsvUrl = (runId: string) => `${BASE}/runs/${runId}/data.csv`;
+
 export interface AskRequest {
   question: string;
   conversationId?: string;

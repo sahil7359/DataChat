@@ -23,7 +23,14 @@ from app.infrastructure.observability.metrics import Metrics
 from app.interface.api.errors import register_exception_handlers
 from app.interface.api.middleware import RequestContextMiddleware
 from app.interface.api.rate_limit import RateLimiter
-from app.interface.api.routers import chat, conversations, datasets, health, metrics
+from app.interface.api.routers import (
+    chat,
+    conversations,
+    datasets,
+    health,
+    metrics,
+    reports,
+)
 
 _log = get_logger("app")
 
@@ -57,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router, prefix=api)
     app.include_router(conversations.router, prefix=api)
     app.include_router(datasets.router, prefix=api)
+    app.include_router(reports.router, prefix=api)
     app.include_router(health.router)
     app.include_router(metrics.router)
     return app

@@ -36,6 +36,11 @@ def answer_cache_key(question: str) -> str:
     return f"cache:answer:{digest}"
 
 
+def report_cache_key(run_id: str) -> str:
+    """Per-run key so a finished answer can be downloaded as a report/CSV later."""
+    return f"report:{run_id}"
+
+
 def serialize_answer(values: Mapping[str, Any]) -> bytes | None:
     """Encode a successful final state, or return None if it isn't cacheable.
 
@@ -48,6 +53,7 @@ def serialize_answer(values: Mapping[str, Any]) -> bytes | None:
     plan = values.get("plan")
     chart = values.get("chart_spec")
     payload = {
+        "question": values.get("question"),
         "plan": (
             {"steps": list(plan.steps), "target_tables": list(plan.target_tables)}
             if plan is not None
