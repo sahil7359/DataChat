@@ -48,7 +48,9 @@ def serialize_answer(values: Mapping[str, Any]) -> bytes | None:
     empty turn must never be pinned.
     """
     execution = values.get("execution")
-    if execution is None or values.get("error_code"):
+    # Only cache real, non-empty data answers: an empty result means the web
+    # fallback (if any) produced the answer, which is time-sensitive and unkeyed.
+    if execution is None or execution.row_count == 0 or values.get("error_code"):
         return None
     plan = values.get("plan")
     chart = values.get("chart_spec")

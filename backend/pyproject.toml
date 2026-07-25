@@ -36,6 +36,8 @@ agent = [
     # The Postgres checkpointer talks psycopg3, which needs a libpq wrapper; the
     # binary wheel bundles libpq so no system package is required in the image.
     "psycopg[binary]>=3.2",
+    # Keyless web search for the out-of-scope fallback (metasearch over DuckDuckGo etc).
+    "ddgs>=9.0",
 ]
 mlops = ["mlflow>=3.1,<4", "pyarrow>=23.0.1"]
 
@@ -102,7 +104,7 @@ mypy_path = "."
 exclude = ["migrations/versions/"]
 
 [[tool.mypy.overrides]]
-module = ["sqlglot.*", "langgraph.*", "langchain_core.*", "mlflow.*", "pgvector.*"]
+module = ["sqlglot.*", "langgraph.*", "langchain_core.*", "mlflow.*", "pgvector.*", "ddgs.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

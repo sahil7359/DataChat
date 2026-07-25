@@ -142,6 +142,16 @@ class ExecutionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class WebResult:
+    """One untrusted web search hit. Its text is data for the model to summarise,
+    never an instruction to follow (the web-answer prompt is hardened accordingly)."""
+
+    title: str
+    url: str
+    snippet: str
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationResult:
     ok: bool
     plausible: bool

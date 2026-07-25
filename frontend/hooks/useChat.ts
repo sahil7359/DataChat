@@ -16,6 +16,7 @@ export interface TurnState {
   rows: RowsEvent | null;
   explanation: string;
   chart: Record<string, unknown> | null;
+  webSources: { title: string; url: string }[] | null;
   awaiting: AwaitingApprovalEvent | null;
   error: { code: string; message: string } | null;
   runId: string | null;
@@ -32,6 +33,7 @@ const INITIAL: TurnState = {
   rows: null,
   explanation: "",
   chart: null,
+  webSources: null,
   awaiting: null,
   error: null,
   runId: null,
@@ -52,6 +54,8 @@ function reduce(state: TurnState, event: AgentEvent): TurnState {
       return { ...base, explanation: state.explanation + event.text };
     case "chart_spec":
       return { ...base, chart: event.spec };
+    case "web_sources":
+      return { ...base, webSources: event.sources };
     case "awaiting_approval":
       return { ...base, awaiting: event, runId: event.run_id };
     case "error":

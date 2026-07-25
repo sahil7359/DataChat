@@ -30,6 +30,7 @@ _DEFAULTS: Mapping[TaskKind, str] = {
     TaskKind.VERIFY: "OK",
     TaskKind.CLARIFY: "CLEAR",
     TaskKind.CLASSIFY: "in_scope",
+    TaskKind.WEB_ANSWER: "Based on the web results [1], here is a brief summary of what was found.",
 }
 
 

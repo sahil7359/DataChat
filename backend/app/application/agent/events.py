@@ -62,6 +62,15 @@ class ChartSpecEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class WebSourcesEvent:
+    """Emitted when the answer came from the web, not the governed datasets — the
+    UI labels it and lists the citations."""
+
+    sources: Sequence[Mapping[str, str]]  # {"title", "url"}
+    type: str = "web_sources"
+
+
+@dataclass(frozen=True, slots=True)
 class ErrorEvent:
     code: str
     message: str
@@ -83,6 +92,7 @@ AgentEvent = (
     | RowsEvent
     | ExplanationDeltaEvent
     | ChartSpecEvent
+    | WebSourcesEvent
     | ErrorEvent
     | DoneEvent
 )

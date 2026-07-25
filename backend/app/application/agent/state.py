@@ -15,6 +15,7 @@ from app.domain.entities import (
     RetrievedContext,
     ValidationResult,
     VerificationResult,
+    WebResult,
 )
 from app.domain.value_objects import ChartSpec
 
@@ -32,6 +33,7 @@ class AgentState(TypedDict, total=False):
     verification: VerificationResult | None
     explanation: str | None
     chart_spec: ChartSpec | None
+    web_sources: tuple[WebResult, ...] | None
 
     # HITL
     approve_sql: bool

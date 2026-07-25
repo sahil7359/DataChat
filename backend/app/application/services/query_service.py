@@ -29,6 +29,7 @@ from app.application.agent.events import (
     RowsEvent,
     SqlEvent,
     StatusEvent,
+    WebSourcesEvent,
 )
 from app.application.agent.state import AgentState
 from app.application.services.answer_cache import (
@@ -253,6 +254,11 @@ def _events_for(update: Mapping[str, Any]) -> list[AgentEvent]:
     chart = update.get("chart_spec")
     if chart is not None:
         events.append(ChartSpecEvent(spec=chart.spec))
+    web_sources = update.get("web_sources")
+    if web_sources:
+        events.append(
+            WebSourcesEvent(sources=[{"title": s.title, "url": s.url} for s in web_sources])
+        )
     return events
 
 

@@ -40,6 +40,7 @@ class TaskKind(StrEnum):
     VERIFY = "verify"
     CLARIFY = "clarify"
     CLASSIFY = "classify"
+    WEB_ANSWER = "web_answer"
 
 
 class RunStatus(StrEnum):
@@ -78,6 +79,7 @@ class AgentStage(StrEnum):
     REPAIR = "repairing"
     EXPLAIN = "explaining"
     VISUALIZE = "visualizing"
+    WEB_FALLBACK = "searching_web"
     DONE = "done"
 
 

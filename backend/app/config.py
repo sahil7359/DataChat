@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     retrieval_k: int = 8
     # Whole-answer cache TTL: repeat questions replay a stored answer for this long.
     answer_cache_ttl_s: int = 3600
+    # Web-search fallback for questions with no answer in the governed data.
+    # Off by default; results are untrusted and never touch the SQL path.
+    web_search_enabled: bool = False
+    web_search_provider: str = "mock"  # mock | ddgs
 
     # --- HITL ------------------------------------------------------------
     approve_sql_default: bool = False

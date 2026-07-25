@@ -22,11 +22,13 @@ from app.application.agent.nodes.retrieve import RetrieveContextNode
 from app.application.agent.nodes.understand import UnderstandNode
 from app.application.agent.nodes.verify import VerifyNode
 from app.application.agent.nodes.visualize import VisualizeNode
+from app.application.agent.nodes.web_fallback import WebFallbackNode
 from app.domain.ports.catalog import SchemaCatalog
 from app.domain.ports.llm import LLMProvider
 from app.domain.ports.repositories import AgentActionRepository
 from app.domain.ports.sql import QueryExecutor, SqlValidator
 from app.domain.ports.tracing import Tracer
+from app.domain.ports.web_search import WebSearchProvider
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +39,7 @@ class NodeDependencies:
     validator: SqlValidator
     executor: QueryExecutor
     audit: AgentActionRepository | None = None
+    web_search: WebSearchProvider | None = None
     retrieval_k: int = 8
 
 
@@ -69,6 +72,10 @@ class NodeFactory:
                 return ExplainNode(d.tracer, d.llm)
             case "visualize":
                 return VisualizeNode(d.tracer)
+            case "web_fallback":
+                if d.web_search is None:
+                    raise ValueError("web_fallback node requires a web_search provider")
+                return WebFallbackNode(d.tracer, d.llm, d.web_search)
             case "respond":
                 return RespondNode(d.tracer)
             case _:

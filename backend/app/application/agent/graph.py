@@ -10,6 +10,7 @@ prod) for durable state across cold starts (NFR-3).
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -36,13 +37,21 @@ _NODES = (
 
 
 class GraphBuilder:
-    def __init__(self, factory: NodeFactory, *, max_repair_attempts: int = 2) -> None:
+    def __init__(
+        self,
+        factory: NodeFactory,
+        *,
+        max_repair_attempts: int = 2,
+        web_fallback_enabled: bool = False,
+    ) -> None:
         self._factory = factory
         self._max_repair = max_repair_attempts
+        self._web_fallback = web_fallback_enabled
 
     def build(self, checkpointer: BaseCheckpointSaver[Any] | None = None) -> Any:
         graph = StateGraph(AgentState)
-        for name in _NODES:
+        nodes = (*_NODES, "web_fallback") if self._web_fallback else _NODES
+        for name in nodes:
             graph.add_node(name, self._factory.build(name))
 
         graph.add_edge(START, "understand")
@@ -67,14 +76,19 @@ class GraphBuilder:
             {"execute": "execute", "guardrail": "guardrail", "respond": "respond"},
         )
         graph.add_edge("execute", "verify")
-        graph.add_conditional_edges(
-            "verify",
-            self._route_after_verify,
-            {"repair": "repair", "explain": "explain", "respond": "respond"},
-        )
+        verify_targets: dict[Hashable, str] = {
+            "repair": "repair",
+            "explain": "explain",
+            "respond": "respond",
+        }
+        if self._web_fallback:
+            verify_targets["web_fallback"] = "web_fallback"
+        graph.add_conditional_edges("verify", self._route_after_verify, verify_targets)
         graph.add_edge("repair", "generate_sql")
         graph.add_edge("explain", "visualize")
         graph.add_edge("visualize", "respond")
+        if self._web_fallback:
+            graph.add_edge("web_fallback", "respond")
         graph.add_edge("respond", END)
         return graph.compile(checkpointer=checkpointer)
 
@@ -97,6 +111,11 @@ class GraphBuilder:
             return "repair"
         if state.get("error") is not None:
             return "respond"
+        # A valid query that found nothing: fall back to the web when it's enabled,
+        # rather than explaining an empty table. Web content never re-enters SQL.
+        execution = state.get("execution")
+        if self._web_fallback and (execution is None or execution.is_empty()):
+            return "web_fallback"
         return "explain"
 
 

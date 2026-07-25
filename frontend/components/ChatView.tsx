@@ -111,6 +111,23 @@ function TurnView({
       {state.rows && <ResultsTable rows={state.rows} />}
       {state.chart && <ChartRenderer spec={state.chart} />}
 
+      {state.webSources && (
+        <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-xs">
+          <p className="font-medium text-amber-300/90">
+            Answered from the web — not your governed datasets.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {state.webSources.map((s) => (
+              <li key={s.url}>
+                <a href={s.url} target="_blank" rel="noreferrer" className="underline opacity-80">
+                  {s.title || s.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {state.explanation && <p className="text-sm leading-relaxed">{state.explanation}</p>}
 
       {state.done && state.rows && state.runId && (

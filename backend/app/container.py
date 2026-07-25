@@ -22,6 +22,7 @@ from app.domain.ports.catalog import SchemaCatalog
 from app.domain.ports.llm import EmbeddingProvider, LLMProvider
 from app.domain.ports.sql import QueryExecutor
 from app.domain.ports.tracing import Tracer
+from app.domain.ports.web_search import WebSearchProvider
 from app.domain.value_objects import Provider
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.catalog.pgvector import PgVectorSchemaCatalog
@@ -49,6 +50,7 @@ from app.infrastructure.observability.tracing import NullTracer
 from app.infrastructure.sql.cache import CachingQueryExecutor
 from app.infrastructure.sql.executor import ReadOnlyQueryExecutor
 from app.infrastructure.sql.validator import SqlValidatorChain
+from app.infrastructure.web.search import DdgsWebSearchProvider, MockWebSearchProvider
 
 
 class Container:
@@ -139,6 +141,13 @@ class Container:
         )
         return CachingQueryExecutor(inner, self._cache, metrics=self._metrics)
 
+    def web_search(self) -> WebSearchProvider | None:
+        if not self._settings.web_search_enabled:
+            return None
+        if self._settings.web_search_provider == "ddgs":
+            return DdgsWebSearchProvider()
+        return MockWebSearchProvider()
+
     def node_dependencies(self) -> NodeDependencies:
         return NodeDependencies(
             tracer=self._tracer,
@@ -147,14 +156,17 @@ class Container:
             validator=SqlValidatorChain(self._settings.row_cap),
             executor=self.executor(),
             audit=SqlAgentActionRepository(self._sessionmaker),
+            web_search=self.web_search(),
             retrieval_k=self._settings.retrieval_k,
         )
 
     def query_service(self, checkpointer: BaseCheckpointSaver[Any] | None = None) -> QueryService:
         factory = NodeFactory(self.node_dependencies())
-        graph = GraphBuilder(factory, max_repair_attempts=self._settings.max_repair_attempts).build(
-            checkpointer
-        )
+        graph = GraphBuilder(
+            factory,
+            max_repair_attempts=self._settings.max_repair_attempts,
+            web_fallback_enabled=self._settings.web_search_enabled,
+        ).build(checkpointer)
         return QueryService(
             graph,
             conversations=SqlConversationRepository(self._sessionmaker),

@@ -35,6 +35,10 @@ export interface ChartSpecEvent {
   type: "chart_spec";
   spec: Record<string, unknown>;
 }
+export interface WebSourcesEvent {
+  type: "web_sources";
+  sources: { title: string; url: string }[];
+}
 export interface ErrorEvent {
   type: "error";
   code: string;
@@ -54,6 +58,7 @@ export type AgentEvent =
   | RowsEvent
   | ExplanationDeltaEvent
   | ChartSpecEvent
+  | WebSourcesEvent
   | ErrorEvent
   | DoneEvent;
 

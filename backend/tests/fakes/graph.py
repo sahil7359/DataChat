@@ -13,6 +13,7 @@ from app.domain.ports.cache import Cache
 from app.domain.ports.llm import LLMProvider
 from app.domain.ports.repositories import AgentActionRepository
 from app.domain.ports.sql import QueryExecutor
+from app.domain.ports.web_search import WebSearchProvider
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
 from tests.fakes.catalog import FakeSchemaCatalog
@@ -33,6 +34,7 @@ def build_service(
     executor: QueryExecutor | None = None,
     audit: AgentActionRepository | None = None,
     answer_cache: Cache | None = None,
+    web_search: WebSearchProvider | None = None,
     max_repair: int = 2,
 ) -> QueryService:
     deps = NodeDependencies(
@@ -42,8 +44,11 @@ def build_service(
         validator=SqlValidatorChain(row_cap=1000),
         executor=executor or FakeQueryExecutor(result=ROWS),
         audit=audit,
+        web_search=web_search,
     )
-    return QueryService(
-        GraphBuilder(NodeFactory(deps), max_repair_attempts=max_repair).build(MemorySaver()),
-        answer_cache=answer_cache,
-    )
+    graph = GraphBuilder(
+        NodeFactory(deps),
+        max_repair_attempts=max_repair,
+        web_fallback_enabled=web_search is not None,
+    ).build(MemorySaver())
+    return QueryService(graph, answer_cache=answer_cache)

@@ -46,6 +46,10 @@ services:
       DATACHAT_OLLAMA_BASE_URL: "${DATACHAT_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}"
       DATACHAT_OLLAMA_API_KEY: "${DATACHAT_OLLAMA_API_KEY:-}"
       DATACHAT_OLLAMA_MODEL: "${DATACHAT_OLLAMA_MODEL:-llama3.2}"
+      # Web-search fallback for out-of-scope questions (off by default; results are
+      # untrusted and never touch the SQL path). provider: mock | ddgs
+      DATACHAT_WEB_SEARCH_ENABLED: "${DATACHAT_WEB_SEARCH_ENABLED:-false}"
+      DATACHAT_WEB_SEARCH_PROVIDER: "${DATACHAT_WEB_SEARCH_PROVIDER:-mock}"
       DATACHAT_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-datachat}:${POSTGRES_PASSWORD:-datachat}@postgres:5432/${POSTGRES_DB:-datachat}
       DATACHAT_EXECUTOR_DATABASE_URL: postgresql+asyncpg://datachat_exec:datachat_exec@postgres:5432/${POSTGRES_DB:-datachat}
       DATACHAT_EXECUTOR_ROLE_PASSWORD: datachat_exec
