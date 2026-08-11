@@ -40,8 +40,7 @@ Public open datasets are rich but locked behind SQL and BI tools. Most "text-to-
 - **Grounded (RAG-to-SQL)** — a semantic layer (schema docs, synonyms, few-shot examples) is retrieved via pgvector so the model doesn't invent columns.
 - **Human-in-the-loop** — approve or edit the SQL before it runs; durable state means the pause survives reloads and cold starts.
 - **Your GPU is the AI** — a self-hosted **Ollama** model (behind a token-guarded tunnel) is the primary provider, with **Gemini→Groq** as automatic circuit-breaker fallback. Private, free, and swappable.
-- **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question, skipping the whole LLM chain, with zero false-positive risk (exact-match, never fuzzy). <!-- No speedup figure published: the cache hit path is not yet instrumented end to end, so any number here would be unreproducible. -->
-
+- **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question, skipping the whole LLM chain, with zero false-positive risk (exact-match, never fuzzy). Measured **~1.0–1.6 s → ~80 ms** (see [Evaluation](#evaluation) for conditions).
 - **Downloadable reports & data** — every answer can be exported as a Markdown report (question, summary, SQL, table, and links to the source datasets) or a CSV of the result set.
 - **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web-search fallback replies from the web *with citations*, clearly labelled and kept entirely out of the SQL path.
 - **Evaluated** — a 26-case golden set (21 answerable + 5 that *should* be refused) scored by result-set equality, BIRD-style. A deterministic pipeline gate runs on every PR; the model-quality number is measured separately against a committed baseline. See [Evaluation](#evaluation).
@@ -163,6 +162,21 @@ same run — one needs a real model, the other has to be free and deterministic.
 Tolerance rationale: one answerable case is worth 1/21 = 0.048, so 0.05 absorbs a
 single case flipping and blocks two. Baselines are measured and committed, never
 hand-written.
+
+### Answer-cache latency
+
+End-to-end through the containerised stack (`docker compose up`), real model, five
+distinct questions asked cold then repeated:
+
+| Path | Latency | SSE frames |
+|---|---:|---:|
+| Cold (full agent chain) | 987–1569 ms | 15–16 |
+| Cached (exact-match replay) | 77–87 ms | 6–7 |
+
+<sub>Conditions: local Ollama with `qwen2.5:7b-instruct` already resident in VRAM,
+Postgres and Redis on the same host. A cold model load or a free-tier cold start
+adds tens of seconds to the first number and does not affect the second — so treat
+this as the steady-state ratio (~15–20×), not a cold-boot claim.</sub>
 
 ## Testing, observability & security
 

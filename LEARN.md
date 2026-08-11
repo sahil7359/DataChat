@@ -145,11 +145,50 @@ enforces auth in production.
   pre-existing by stashing all changes and re-running on a clean tree: **same 7
   failures**. Environmental (throwaway Postgres volume), not caused by this work.
 
+---
+
+## 2026-08-11 — Container verified end to end (C1)
+
+Both images build clean. The full five-service stack (`postgres`, `redis`,
+`backend`, `frontend`, `mlflow`) comes up from a wiped volume, auto-migrates and
+auto-seeds on boot, and `/ready` returns 200.
+
+**SSE verified against the real model, not mocks.** The container ran with
+`USE_MOCKS=false`, Ollama enabled, `qwen2.5:7b-instruct`. `POST /api/v1/chat`
+returns `content-type: text/event-stream` and streams
+`status → plan → sql → rows → explanation_delta → done` — 15 frames for a cold
+answer, 6–7 for a cache replay. Answers were correct against the seed slice
+(top-5 CO₂ per capita: Qatar, Saudi Arabia, Australia, US, Canada; highest-average
+region: Middle East & North Africa at 28.15).
+
+Live confirmation of a known scoring artifact: the agent returned country *names*
+where the golden gold SQL uses ISO codes — substantively right, scored as a miss.
+That is exactly the case flagged in the `notes` field of that golden case.
+
+Note the route prefix is `/api/v1/chat`, not `/chat`.
+
+### Cache figure restored, corrected
+
+The old "~20–40 s → ~70 ms" had no artifact behind it and was cut. It is now
+measured and back: **987–1569 ms cold → 77–87 ms cached** across five distinct
+questions, roughly 15–20×. The old *cached* number (~70 ms) was accurate; the old
+*cold* number was not reproducible on a warm local model — it likely came from a
+cold-start context that includes model load. The README now states the conditions
+so the ratio can't be mistaken for a cold-boot claim.
+
 ### Still open
 
-- Cache speedup figure pulled from the README — the hit path is not instrumented,
-  so the old "~20–40s → ~70ms" had no artifact behind it. Re-publish only with a
-  measurement.
+- **7 integration tests fail on this host** (`test_readonly_role.py`,
+  `test_executor.py`), all on `InvalidPasswordError` for `datachat_exec`. Proven
+  pre-existing: stashing every change and re-running on a clean tree reproduces the
+  same 7. Also fails in isolation, so it is not test-ordering, and it survives a
+  wiped volume. The role *is* created with a real SCRAM verifier — checked
+  `pg_authid`, so this is **not** an empty-password hole — but the verifier does
+  not match what the host-side test connects with. Suspect the
+  `set_config('datachat.exec_pw', ...)` → `current_setting(...)` handoff in
+  `0003_roles_grants` does not resolve as intended when alembic is driven from the
+  host. CI (Linux, container-run migrations) is the reference environment. Worth
+  its own session; untouched here.
 - Backend image is 3.16GB; ~1.13GB is a duplicated venv layer caused by
   `chown -R` after `COPY`, ~470MB is MLflow's scientific stack, and dev tools
   (`pytest`, `mypy`, `ruff`, `bandit`) ship to production because `uv sync` lacks
