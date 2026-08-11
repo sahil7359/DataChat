@@ -47,13 +47,20 @@ class OpenAICompatibleAdapter(BaseHttpAdapter):
 
         body = await self._post_json(
             f"{self._base_url}/chat/completions",
-            headers={
-                "authorization": f"Bearer {self._api_key}",
-                "content-type": "application/json",
-            },
+            headers=self._headers(),
             payload=payload,
         )
         return self._parse(body)
+
+    def _headers(self) -> dict[str, str]:
+        # why: an unauthenticated local Ollama has no token, and httpx rejects a
+        # bare "Bearer " as an illegal header value — the failure surfaced as an
+        # opaque transport error rather than a config problem. Omit the header
+        # entirely when there is no key; the tunnel still enforces auth in prod.
+        headers = {"content-type": "application/json"}
+        if self._api_key:
+            headers["authorization"] = f"Bearer {self._api_key}"
+        return headers
 
     async def stream(self, req: LLMRequest) -> AsyncIterator[str]:
         resp = await self.complete(req)
