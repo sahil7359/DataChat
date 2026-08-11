@@ -58,12 +58,17 @@ services:
       # Set after the frontend is deployed, then redeploy the backend.
       - key: DATACHAT_CORS_ORIGINS
         sync: false
-      # --- optional ---
-      - key: DATACHAT_GEMINI_API_KEY
-        sync: false
-      - key: DATACHAT_OLLAMA_BASE_URL
-        sync: false
-      - key: DATACHAT_OLLAMA_API_KEY
-        sync: false
-      - key: DATACHAT_OLLAMA_MODEL
-        sync: false
+      #
+      # Deliberately NOT declared here: DATACHAT_GEMINI_API_KEY and the
+      # DATACHAT_OLLAMA_* trio. Render prompts for every `sync: false` key when a
+      # Blueprint is applied, with no notion of optional, so declaring them turns
+      # a 6-field setup into a 10-field one where four answers are ignored
+      # (Ollama is disabled above, and an absent Gemini key simply means the
+      # provider is not registered).
+      #
+      # Add them in the dashboard when you actually want them:
+      #   Gemini fallback : DATACHAT_GEMINI_API_KEY
+      #   Demo on your GPU: DATACHAT_OLLAMA_ENABLED=true
+      #                     DATACHAT_OLLAMA_BASE_URL=https://<tunnel-host>/v1
+      #                     DATACHAT_OLLAMA_API_KEY=<Caddy bearer token>
+      #                     DATACHAT_OLLAMA_MODEL=qwen2.5:7b-instruct
