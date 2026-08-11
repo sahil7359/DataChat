@@ -40,10 +40,11 @@ Public open datasets are rich but locked behind SQL and BI tools. Most "text-to-
 - **Grounded (RAG-to-SQL)** — a semantic layer (schema docs, synonyms, few-shot examples) is retrieved via pgvector so the model doesn't invent columns.
 - **Human-in-the-loop** — approve or edit the SQL before it runs; durable state means the pause survives reloads and cold starts.
 - **Your GPU is the AI** — a self-hosted **Ollama** model (behind a token-guarded tunnel) is the primary provider, with **Gemini→Groq** as automatic circuit-breaker fallback. Private, free, and swappable.
-- **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question (measured ~20–40s → ~70ms) with zero false-positive risk (exact-match, never fuzzy).
+- **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question, skipping the whole LLM chain, with zero false-positive risk (exact-match, never fuzzy). <!-- No speedup figure published: the cache hit path is not yet instrumented end to end, so any number here would be unreproducible. -->
+
 - **Downloadable reports & data** — every answer can be exported as a Markdown report (question, summary, SQL, table, and links to the source datasets) or a CSV of the result set.
 - **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web-search fallback replies from the web *with citations*, clearly labelled and kept entirely out of the SQL path.
-- **Evaluated** — execution-accuracy golden set gates every change in CI (the same idea behind the BIRD benchmark).
+- **Evaluated** — a 26-case golden set (21 answerable + 5 that *should* be refused) scored by result-set equality, BIRD-style. A deterministic pipeline gate runs on every PR; the model-quality number is measured separately against a committed baseline. See [Evaluation](#evaluation).
 - **Observable** — every run and model call traced in MLflow, with a versioned prompt registry.
 - **Streaming UI** — watch the agent think; results render as a chart from a backend-emitted Vega-Lite spec.
 - **$0/month** — every component runs on a permanent free tier or your own hardware.
@@ -122,19 +123,46 @@ To use real models later, set `USE_MOCKS=false` and add keys — see **[GOLIVE.m
 - **Evaluation you can trust:** execution-accuracy scoring (result-set equality) gates regressions in CI.
 - **Durable agent state:** LangGraph checkpoints let a human-in-the-loop pause survive reloads and cold starts.
 
-## Evaluation results
+## Evaluation
 
-Measured on the golden set (result-set-equality scoring, BIRD-style) with the
-self-hosted **`qwen2.5:7b-instruct`** model — reproduce with `make eval`:
+### What produced these numbers
 
-| Metric | Score | What it means |
-|---|---:|---|
-| Execution accuracy | **0.80** | Agent's result set equals the gold query's, exactly |
-| SQL valid rate | **1.00** | Generated SQL parses and passes the AST guardrail |
-| Guardrail pass rate | **1.00** | No generated query was unsafe |
-| Explanation faithfulness | **1.00** | Prose is grounded in the returned rows (LLM judge) |
+Golden set: **26 cases — 21 answerable + 5 that should be refused** (out-of-scope
+country, indicators we don't carry, an ambiguous question, a year beyond the data).
+No golden question duplicates a few-shot example; a test enforces that, because a
+duplicated question measures copying, not reasoning.
 
-<sub>Small golden set; a bigger model (or the Gemini fallback) scores higher. The one miss returned country *names* where the gold used ISO codes — a strict-equality miss, not a wrong answer.</sub>
+Measured on **`qwen2.5:7b-instruct`** (self-hosted Ollama, `temperature=0`) against
+the `seed` dataset. Reproduce with `make eval-real`.
+
+| Metric | Score | n | What it means |
+|---|---:|---:|---|
+| Execution accuracy | **0.667** | 21 | Agent's result set equals the gold query's, exactly |
+| Refusal accuracy | **0.80** | 5 | Declined instead of inventing an answer it had no data for |
+| SQL valid rate | **0.952** | 21 | Generated SQL parses and passes the AST guardrail |
+| Explanation faithfulness | **0.857** | 21 | Prose is grounded in the returned rows (LLM judge) |
+
+<sub>These are the honest numbers for a 7B model on a deliberately mixed set.
+Earlier the README showed 0.80 execution accuracy — that was a 5-case set, one of
+whose questions was a verbatim few-shot example. Both problems are fixed; the score
+went down because the measurement got harder, not because the agent got worse.
+Known scoring artifact: result-set equality is strict, so an answer returning
+country *names* where the gold used ISO codes counts as a miss despite being
+substantively right.</sub>
+
+### How it is gated
+
+Two tiers, because the published number and the per-PR gate cannot come from the
+same run — one needs a real model, the other has to be free and deterministic.
+
+| Tier | Command | Runs in CI | Gates |
+|---|---|---|---|
+| Pipeline | `make eval` | yes, every PR | Graph, retrieval, guardrail, execution and the scorers, with a scripted LLM holding model quality constant. Must score exactly 1.00. |
+| Quality | `make eval-real` | no (needs a GPU or keys) | Real-model execution accuracy against `backend/eval_baseline.json`, tolerance **0.05** |
+
+Tolerance rationale: one answerable case is worth 1/21 = 0.048, so 0.05 absorbs a
+single case flipping and blocks two. Baselines are measured and committed, never
+hand-written.
 
 ## Testing, observability & security
 
