@@ -1,7 +1,10 @@
 # LEARN — change log with reasoning
 
 A running record of non-obvious changes: what moved, **why**, what else was
-considered, and how to defend it out loud. Newest first.
+considered, and how to defend it out loud. Most recent date first; within a date,
+in the order the work happened.
+
+For *how the system works* rather than why it changed, see [FLOW.md](./FLOW.md).
 
 ---
 
@@ -193,3 +196,97 @@ so the ratio can't be mistaken for a cold-boot claim.
   `chown -R` after `COPY`, ~470MB is MLflow's scientific stack, and dev tools
   (`pytest`, `mypy`, `ruff`, `bandit`) ship to production because `uv sync` lacks
   `--no-dev`. Matters for a Render free-tier cold start.
+
+---
+
+## 2026-08-11 — Structured answers from the web fallback
+
+### The problem
+
+"Not in the available datasets" is a dead end. The fallback existed but returned a
+paragraph, and most of these questions ("which countries have X", "what is Y in
+Z") are inherently tabular — a paragraph reads badly and cannot be exported.
+
+### What changed
+
+`web_fallback` now makes a second versioned LLM call (`web_table@v1`) that
+extracts a small table from the search snippets, rendered with per-row provenance
+and downloadable as a report or CSV.
+
+### Decision 1 — a separate type, not a flag
+
+`WebTable` is its own domain entity. It is *not* an `ExecutionResult` with
+`is_web=True`.
+
+Governed rows are verified by a read-only role and an AST guardrail. Web rows are
+a language model's reading of untrusted snippets. Give them one type and they
+become substitutable in the UI, the report, the cache and the chart — and one
+missed flag check silently launders a scrape as verified data. The separation is
+carried all the way out: a distinct `web_table` SSE event, a distinct report
+document, a `source_url` column in the CSV.
+
+**Alternative considered:** one type plus a provenance flag. Fewer types, but the
+failure mode is invisible and permanent, and the credibility of this whole project
+rests on that distinction holding.
+
+**Defence in two sentences:** governed data and web scrapings are different types
+end to end, so the UI cannot render one through the other's path by accident. The
+web path has exactly one outgoing edge in the graph — to `respond` — so web
+content structurally cannot re-enter SQL generation.
+
+### Decision 2 — the parser enforces attribution, not the prompt
+
+Once extraction is structured, the obvious injection payload changes. A hostile
+page no longer just skews a sentence; it tries to inject a *row* that renders in a
+data table and a downloadable report, with a fabricated citation to look sourced.
+
+So `parse_web_table` re-validates everything the model returns and drops any row
+that is misshapen, all-null, or cites a source index outside the results actually
+shown to it. Columns and rows are capped. Nulls render as an em dash, never the
+string `"None"`, so a gap cannot be misread as data.
+
+Prompt instructions are a request. The parser is the control. There is a test for
+the fabricated-citation case specifically.
+
+### Decision 3 — downloadable, but never replayed
+
+Web answers are written to `report:{run_id}` so the user can download the answer
+they just got, but deliberately **not** to the question-keyed answer cache. The
+web moves; serving a month-old scrape as a fresh answer is worse than a cache
+miss. This preserved the existing "don't cache web answers" decision while fixing
+the fact that reports were silently unavailable for every web answer.
+
+### Verified
+
+End to end in the container against live DuckDuckGo and `qwen2.5:7b-instruct`.
+"What is the adult literacy rate in Kenya?" produced a cited table (82%, 2020,
+attributed to Africa Check), a report with the provenance banner, and a CSV
+carrying `source_url`. 240 unit tests pass; the tier-1 eval gate still passes.
+
+### Honest limits
+
+Snippet fidelity is the ceiling, and it is low. Typical output is one row and one
+or two columns, one of which is often just "Year" — the Kenya CO₂ answer was a
+single cell. This was a deliberate choice against adding a page fetcher, which
+would give real tables at the cost of a new dependency, SSRF and injection
+surface, latency, and robots/ToS obligations on a public demo.
+
+### Consequence to handle before enabling in production
+
+The feature is off by default (`DATACHAT_WEB_SEARCH_ENABLED=false`) and the eval
+graph is built without the fallback, so `refusal_accuracy = 0.80` still holds.
+
+**The moment it is enabled, three of the five refusal cases become wrong** —
+Kenya's CO₂, India's literacy rate and Germany's unemployment would escalate to
+the web rather than refuse, which is now the *desired* behaviour. The golden set
+needs splitting into "must refuse" (genuinely ambiguous) and "must escalate"
+(out-of-corpus but answerable), with a separate `escalation_accuracy`. Not done.
+
+### Also found
+
+- The repair loop burns the full budget — three SQL generations — on questions
+  that can never be answered, before falling through to the web. Real latency and
+  cost per out-of-corpus question.
+- Backend startup blocks on MLflow. With the tracking server down, boot took ~90s
+  instead of seconds: the tracer is best-effort at *runtime* but not at *startup*.
+  That will hurt on a free-tier cold start.

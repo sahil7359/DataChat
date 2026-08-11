@@ -42,7 +42,7 @@ Public open datasets are rich but locked behind SQL and BI tools. Most "text-to-
 - **Your GPU is the AI** — a self-hosted **Ollama** model (behind a token-guarded tunnel) is the primary provider, with **Gemini→Groq** as automatic circuit-breaker fallback. Private, free, and swappable.
 - **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question, skipping the whole LLM chain, with zero false-positive risk (exact-match, never fuzzy). Measured **~1.0–1.6 s → ~80 ms** (see [Evaluation](#evaluation) for conditions).
 - **Downloadable reports & data** — every answer can be exported as a Markdown report (question, summary, SQL, table, and links to the source datasets) or a CSV of the result set.
-- **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web-search fallback replies from the web *with citations*, clearly labelled and kept entirely out of the SQL path.
+- **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web fallback returns a **structured table with a citation on every row**, plus a summary and a downloadable report. Web data is a separate type end to end — its own SSE event, its own report layout, `source_url` in the CSV — so a scrape can never be rendered as verified data, and it never re-enters the SQL path.
 - **Evaluated** — a 26-case golden set (21 answerable + 5 that *should* be refused) scored by result-set equality, BIRD-style. A deterministic pipeline gate runs on every PR; the model-quality number is measured separately against a committed baseline. See [Evaluation](#evaluation).
 - **Observable** — every run and model call traced in MLflow, with a versioned prompt registry.
 - **Streaming UI** — watch the agent think; results render as a chart from a backend-emitted Vega-Lite spec.
@@ -185,6 +185,8 @@ this as the steady-state ratio (~15–20×), not a cold-boot claim.</sub>
 - **Security (OWASP)** — mapped and **tested** against the **LLM Top 10 (2025)** and **Agentic Top 10 (2026)**: prompt-injection corpus, least-privilege tools, read-only execution, rate limits, bounded loops. See [ImplementationPlan §11](./ImplementationPlan.md).
 
 ## Documentation
+
+**Start here:** [**FLOW.md**](./FLOW.md) — how a question becomes an answer, end to end, with the trust boundaries marked. · [LEARN.md](./LEARN.md) — what changed and why, with the alternatives that were rejected.
 
 [PRD](./PRD.md) · [TechSpec](./TechSpec.md) · [AppFlow](./AppFlow.md) · [Design](./Design.md) · [Schema](./Schema.md) · [ImplementationPlan](./ImplementationPlan.md) · [Tracker](./Tracker.md) · [Rules](./Rules.md) · [Security (OWASP matrix)](./SECURITY.md) · [Go-live checklist](./GOLIVE.md) · [Deploy walkthrough](./DEPLOY.md)
 

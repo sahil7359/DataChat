@@ -113,6 +113,10 @@ erDiagram
     text mlflow_run_id
     timestamptz created_at
   }
+%% guardrail_pass_rate now stores sql_valid_rate. The two were computed from the
+%% same expression in EvalReport, so the duplicate metric name was removed rather
+%% than given a fabricated distinction; the column is kept to avoid a migration
+%% for a rename. See LEARN.md 2026-08-11.
   eval_case_results {
     uuid id PK
     uuid eval_run_id FK

@@ -65,6 +65,39 @@ sequenceDiagram
   FE-->>U: render prose + table + chart
 ```
 
+### 2a. Out-of-scope — the web fallback
+
+Reached only when a **valid** query returned **no rows** and
+`DATACHAT_WEB_SEARCH_ENABLED=true`. The governed data has no answer, so rather
+than a dead end the agent searches the web and returns an *attributed* table.
+
+```mermaid
+sequenceDiagram
+  participant FE as Frontend
+  participant ORCH as Agent
+  participant WS as Web search (ddgs)
+  participant LLM as Provider gateway
+
+  ORCH->>ORCH: verify -> execution.is_empty()
+  ORCH->>WS: search(question)
+  WS-->>ORCH: snippets [1..n] (title, url, body)
+  ORCH->>LLM: web_table@v1 (snippets fenced as UNTRUSTED)
+  LLM-->>ORCH: JSON {columns, rows[{values, source}], caveat}
+  ORCH->>ORCH: parse_web_table -> drop unattributable/misshapen rows
+  ORCH-->>FE: event: web_table {columns, rows, row_count, caveat}
+  ORCH->>LLM: web_answer@v1 (prose summary)
+  LLM-->>ORCH: summary with [n] citations
+  ORCH-->>FE: event: explanation_delta
+  ORCH-->>FE: event: web_sources {title, url}
+  ORCH-->>FE: event: done
+  FE-->>FE: render with a "web-sourced, not verified" banner
+```
+
+Note the event is **`web_table`, not `rows`** — a client must not render web
+scrapings through the governed-results path. `web_fallback` has exactly one
+outgoing edge, to `respond`, so web content structurally cannot re-enter SQL
+generation. See [FLOW.md §5](./FLOW.md#5-trust-boundaries).
+
 ## 3. HITL — approve / edit SQL
 
 Interrupt happens **after** the guardrail passes but **before** execution, so a human sees exactly what will run.

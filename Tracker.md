@@ -74,6 +74,32 @@
 | 2026-07-23 | semgrep has poor Windows support | Wired into CI (Linux) in Phase 12; local SAST covered by bandit + ruff's flake8-bandit (S) rules. |
 | 2026-07-23 | import-linter's grimp (`_rustgrimp`) also WDAC-blocked locally | Contracts run in CI; locally the dependency rule is enforced by an ast-based fitness test (`tests/unit/test_architecture.py`). |
 
+## Post-Phase-13 work
+
+| Item | Status | Note | Date |
+|---|---|---|---|
+| Eval gate made real | Done | CI assert was `0.0 <= acc <= 1.0` and the job scored 0.0 while passing. Split into a deterministic pipeline gate (`make eval`, CI) and an opt-in quality gate vs committed `eval_baseline.json` (`make eval-real`, tolerance 0.05). Verified failing by mutation. | 2026-08-11 |
+| Golden set 5 → 26 | Done | 21 answerable + 5 refusal, covering lookups, aggregations, rankings, joins, group-by, time series. Refusals scored separately as `refusal_accuracy`. | 2026-08-11 |
+| Train/test leakage fixed | Done | One golden question was a verbatim few-shot example; `test_golden_set.py` now fails the build on any duplicate. | 2026-08-11 |
+| `guardrail_pass_rate` removed | Done | Same expression as `sql_valid_rate` — two names for one number. DB column retained, now stores `sql_valid_rate`. | 2026-08-11 |
+| Published numbers corrected | Done | 0.667 exec / 0.80 refusal / 0.952 valid / 0.857 faithfulness on qwen2.5:7b-instruct, `temperature=0`, n stated per metric. Old 0.80 came from 5 easy cases with a leak. | 2026-08-11 |
+| Cache latency measured | Done | 987–1569 ms cold → 77–87 ms cached. Replaces the unreproducible "20–40s → 70ms". | 2026-08-11 |
+| Ollama keyless auth fix | Done | `Bearer {empty}` is an illegal httpx header; header now omitted when no key. Unblocks the documented local Ollama path. | 2026-08-11 |
+| Container verified end to end | Done | Five services from a wiped volume, auto-migrate + seed, `/ready` 200, SSE streaming with `USE_MOCKS=false` against qwen2.5:7b-instruct. | 2026-08-11 |
+| Web fallback returns a table | Done | `web_table@v1` extraction with per-row citations, distinct `WebTable` type + `web_table` SSE event + web report layout + `source_url` in CSV. Parser enforces attribution. Off by default. | 2026-08-11 |
+| FLOW.md | Done | Single-file architecture walkthrough with trust boundaries; linked as the entry point from the README. | 2026-08-11 |
+
+## Known open items
+
+| Item | Why it matters |
+|---|---|
+| Frontend does not render `web_table` | The API returns it; `ResultsTable.tsx` / `useChat.ts` do not consume it yet, so the browser UI shows only the prose. |
+| Refusal cases conflict with web fallback | Enabling `DATACHAT_WEB_SEARCH_ENABLED` makes 3 of 5 refusal cases wrong — they should *escalate*, not refuse. Needs a refuse/escalate split and an `escalation_accuracy` metric before going live with it. |
+| 7 integration tests fail on the Windows host | `datachat_exec` password auth; pre-existing, reproduces on clean `master`, fails in isolation, survives a wiped volume. Not an empty-password hole (`pg_authid` shows a real SCRAM verifier). CI is the reference environment. |
+| Backend image is 3.16GB | ~1.13GB duplicated venv layer (`chown -R` after `COPY`), ~470MB MLflow scientific stack, dev tools shipped (no `--no-dev`). Hurts a Render free-tier cold pull. |
+| Startup blocks on MLflow | With the tracking server down, boot took ~90s. Tracing is best-effort at runtime but not at startup. |
+| Repair budget spent on unanswerable questions | Three SQL generations before falling through to the web fallback. |
+
 ## Deferred to GOLIVE.md (needs user accounts)
 
 | Item | Why deferred |
