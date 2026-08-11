@@ -72,6 +72,10 @@ class Settings(BaseSettings):
 
     # --- Observability ---------------------------------------------------
     mlflow_tracking_uri: str = "http://localhost:5000"
+    # Cap on how long startup may spend talking to the tracking server. Telemetry
+    # must never gate readiness — an unreachable host used to add ~90s to boot,
+    # long enough for a platform health check to fail the deploy.
+    mlflow_startup_timeout_s: float = 5.0
 
     # --- Agent bounds (LLM10 / ASI08 — bounded consumption) --------------
     max_repair_attempts: int = 2

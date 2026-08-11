@@ -44,6 +44,7 @@ from app.infrastructure.llm.groq import GroqAdapter
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.llm.ollama import OllamaAdapter
 from app.infrastructure.llm.router import ProviderRouter, TaskAwarePolicy
+from app.infrastructure.observability.logging import get_logger
 from app.infrastructure.observability.metrics import Metrics
 from app.infrastructure.observability.mlflow_tracer import MLflowTracer
 from app.infrastructure.observability.tracing import NullTracer
@@ -51,6 +52,8 @@ from app.infrastructure.sql.cache import CachingQueryExecutor
 from app.infrastructure.sql.executor import ReadOnlyQueryExecutor
 from app.infrastructure.sql.validator import SqlValidatorChain
 from app.infrastructure.web.search import DdgsWebSearchProvider, MockWebSearchProvider
+
+_log = get_logger("container")
 
 
 class Container:
@@ -127,6 +130,15 @@ class Container:
                 breaker=breaker,
             )
         if not providers:
+            # A deploy with no key and Ollama disabled would otherwise answer every
+            # question with the mock's single canned query and look merely broken.
+            # Under mocks this is expected; in any other config it is a misconfig.
+            if not self._settings.use_mocks:
+                _log.error(
+                    "no_llm_provider_configured",
+                    detail="serving MockLLMProvider: set DATACHAT_GROQ_API_KEY or "
+                    "DATACHAT_GEMINI_API_KEY, or enable DATACHAT_OLLAMA_ENABLED",
+                )
             return MockLLMProvider()
         return ProviderRouter(providers, TaskAwarePolicy(self._settings.provider_order))
 

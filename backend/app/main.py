@@ -8,7 +8,8 @@ run the whole edge with fakes and no live services.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any
 
@@ -70,6 +71,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+async def _register_prompts_bounded(
+    register: Callable[[dict[str, str]], None], versions: dict[str, str], settings: Settings
+) -> None:
+    """Register prompt versions without letting telemetry gate readiness.
+
+    why: registration talks to the MLflow tracking server. When that host is
+    unreachable the call blocks on connection retries — measured at ~90s, long
+    enough for a platform health check on ``/ready`` to fail the deploy. The
+    tracer is best-effort at request time; startup has to be too.
+
+    Bounded and run off the event loop. On timeout the worker thread is left to
+    finish and its result discarded: it is a log line, not state we need.
+    """
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(register, versions), timeout=settings.mlflow_startup_timeout_s
+        )
+    except TimeoutError:
+        _log.warning("prompt_register_timed_out", timeout_s=settings.mlflow_startup_timeout_s)
+    except Exception:
+        _log.warning("prompt_register_failed")
+
+
 async def _setup(app: FastAPI, settings: Settings) -> None:
     from app.application.prompts.registry import PROMPT_VERSIONS
     from app.container import Container
@@ -79,7 +103,7 @@ async def _setup(app: FastAPI, settings: Settings) -> None:
     container = Container(settings)
     app.state.metrics = container.metrics
     if not settings.use_mocks:
-        register_prompts(PROMPT_VERSIONS)
+        await _register_prompts_bounded(register_prompts, PROMPT_VERSIONS, settings)
     stack = AsyncExitStack()
     checkpointer = await _build_checkpointer(stack, settings)
 

@@ -1,6 +1,16 @@
 # Render Blueprint (infra-as-code). In Render: New → Blueprint → pick this repo.
 # It creates the backend web service on the free plan. Secret values are marked
 # `sync: false` — you paste them in the Render dashboard (they never live in git).
+#
+# Provider choice for the deployed demo: a cloud key is primary, NOT the
+# self-hosted Ollama. A public URL has to answer when the author's PC is off, and
+# a quick Cloudflare tunnel changes hostname on every restart. The Ollama adapter
+# is the same port behind the same router — flip the two OLLAMA_* vars below to
+# demo it live — but the always-on link does not depend on it.
+#
+# Providers register only when their key is present (see `Container.llm`), so
+# setting GROQ alone makes Groq the sole provider for every task. Set both keys
+# and the router prefers by task with a circuit breaker between them.
 services:
   - type: web
     name: datachat-api
@@ -16,13 +26,27 @@ services:
     envVars:
       - key: DATACHAT_USE_MOCKS
         value: "false"
+      # Off for the deployed demo. Set true + fill the OLLAMA_* secrets to point
+      # the live backend at your own GPU for an interview demo.
       - key: DATACHAT_OLLAMA_ENABLED
-        value: "true"
-      - key: DATACHAT_OLLAMA_MODEL
-        value: "llama3.2"
+        value: "false"
       - key: DATACHAT_LLM_TIMEOUT_S
-        value: "90"
+        value: "60"
+      # Telemetry must not gate readiness: with no reachable tracking server,
+      # startup gives up after this many seconds instead of blocking the health
+      # check. Leave MLFLOW_TRACKING_URI unset to skip tracing entirely.
+      - key: DATACHAT_MLFLOW_STARTUP_TIMEOUT_S
+        value: "5"
+      # Stays off until the golden set distinguishes "must refuse" from "must
+      # escalate" — otherwise deployed behaviour contradicts the published
+      # refusal_accuracy. See LEARN.md 2026-08-11.
+      - key: DATACHAT_WEB_SEARCH_ENABLED
+        value: "false"
       # --- paste these in the dashboard (Environment tab) ---
+      # REQUIRED: at least one provider key, or every answer is the mock's single
+      # canned query. The app logs `no_llm_provider_configured` if you forget.
+      - key: DATACHAT_GROQ_API_KEY
+        sync: false
       - key: DATACHAT_DATABASE_URL
         sync: false
       - key: DATACHAT_EXECUTOR_DATABASE_URL
@@ -31,14 +55,15 @@ services:
         sync: false
       - key: DATACHAT_REDIS_URL
         sync: false
+      # Set after the frontend is deployed, then redeploy the backend.
+      - key: DATACHAT_CORS_ORIGINS
+        sync: false
+      # --- optional ---
+      - key: DATACHAT_GEMINI_API_KEY
+        sync: false
       - key: DATACHAT_OLLAMA_BASE_URL
         sync: false
       - key: DATACHAT_OLLAMA_API_KEY
         sync: false
-      - key: DATACHAT_CORS_ORIGINS
-        sync: false
-      # optional cloud fallback:
-      - key: DATACHAT_GEMINI_API_KEY
-        sync: false
-      - key: DATACHAT_GROQ_API_KEY
+      - key: DATACHAT_OLLAMA_MODEL
         sync: false

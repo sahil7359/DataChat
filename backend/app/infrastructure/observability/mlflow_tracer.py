@@ -72,12 +72,17 @@ class MLflowTracer:
 
 
 def register_prompts(versions: dict[str, str]) -> None:
-    """Best-effort registration of prompt versions with MLflow."""
+    """Best-effort registration of prompt versions with MLflow.
+
+    why one batched ``log_params`` rather than a loop of ``log_param``: each call
+    round-trips to the tracking server, so N prompts against an unreachable host
+    meant N sequential timeouts. Callers must still bound this — see
+    ``main._register_prompts_bounded``.
+    """
     try:
         import mlflow
 
-        for name, version in versions.items():
-            mlflow.log_param(f"prompt.{name}", version)
+        mlflow.log_params({f"prompt.{name}": version for name, version in versions.items()})
     except Exception:
         _log.info("prompt_register_skipped")
 
