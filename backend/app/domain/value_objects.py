@@ -41,6 +41,7 @@ class TaskKind(StrEnum):
     CLARIFY = "clarify"
     CLASSIFY = "classify"
     WEB_ANSWER = "web_answer"
+    WEB_TABLE = "web_table"
 
 
 class RunStatus(StrEnum):

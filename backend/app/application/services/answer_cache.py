@@ -75,6 +75,33 @@ def serialize_answer(values: Mapping[str, Any]) -> bytes | None:
     return json.dumps(payload, default=str).encode("utf-8")
 
 
+def serialize_web_answer(values: Mapping[str, Any]) -> bytes | None:
+    """Encode a web-fallback answer for the per-run report only.
+
+    why separate from ``serialize_answer``: a web answer must never be replayed
+    from the question-keyed cache — the web moves, and serving a month-old scrape
+    as a fresh answer is worse than a cache miss. But the user still needs to
+    download the answer they just got, and that key is per-run, not per-question.
+    So this feeds ``report:{run_id}`` and nothing else.
+    """
+    table = values.get("web_table")
+    if table is None or table.is_empty():
+        return None
+    sources = values.get("web_sources") or ()
+    payload = {
+        "kind": "web",
+        "question": values.get("question"),
+        "explanation": values.get("explanation"),
+        "web_table": {
+            "columns": list(table.columns),
+            "rows": [{"values": list(r.values), "source": r.source_index} for r in table.rows],
+            "caveat": table.caveat,
+        },
+        "web_sources": [{"title": s.title, "url": s.url} for s in sources],
+    }
+    return json.dumps(payload, default=str).encode("utf-8")
+
+
 def deserialize_answer(raw: bytes) -> dict[str, Any]:
     """Rebuild a graph-style update dict so the normal event mapping can replay it."""
     data = json.loads(raw)

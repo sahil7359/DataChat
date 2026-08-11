@@ -16,6 +16,7 @@ from app.domain.entities import (
     ValidationResult,
     VerificationResult,
     WebResult,
+    WebTable,
 )
 from app.domain.value_objects import ChartSpec
 
@@ -34,6 +35,9 @@ class AgentState(TypedDict, total=False):
     explanation: str | None
     chart_spec: ChartSpec | None
     web_sources: tuple[WebResult, ...] | None
+    # Kept separate from `execution` on purpose: web-derived rows must never be
+    # mistaken for guardrailed SQL output. See entities.WebTable.
+    web_table: WebTable | None
 
     # HITL
     approve_sql: bool

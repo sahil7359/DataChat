@@ -71,6 +71,22 @@ class WebSourcesEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class WebTableEvent:
+    """Tabular data read from web snippets.
+
+    A distinct event from ``rows`` so a client cannot render web scrapings through
+    the governed-results path by accident: every row carries the index of the
+    source it came from, and ``caveat`` states what the sources did not cover.
+    """
+
+    columns: Sequence[str]
+    rows: Sequence[Mapping[str, object]]  # {"values": [...], "source": n}
+    row_count: int
+    caveat: str
+    type: str = "web_table"
+
+
+@dataclass(frozen=True, slots=True)
 class ErrorEvent:
     code: str
     message: str

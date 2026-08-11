@@ -30,6 +30,7 @@ from app.application.agent.events import (
     SqlEvent,
     StatusEvent,
     WebSourcesEvent,
+    WebTableEvent,
 )
 from app.application.agent.state import AgentState
 from app.application.services.answer_cache import (
@@ -37,6 +38,7 @@ from app.application.services.answer_cache import (
     deserialize_answer,
     report_cache_key,
     serialize_answer,
+    serialize_web_answer,
 )
 from app.domain.entities import Conversation
 from app.domain.ports.cache import Cache
@@ -181,6 +183,15 @@ class QueryService:
                 await self._answer_cache.set(
                     report_cache_key(run_id), payload, self._answer_cache_ttl
                 )
+                return
+            # A web-sourced answer: downloadable per run, but deliberately NOT
+            # written to the question-keyed cache, because replaying a stale scrape
+            # as a fresh answer is worse than re-running the search.
+            web_payload = serialize_web_answer(snapshot.values)
+            if web_payload is not None:
+                await self._answer_cache.set(
+                    report_cache_key(run_id), web_payload, self._answer_cache_ttl
+                )
 
     async def _begin_run(
         self, run_id: str, cid: str, provided_cid: str | None, question: str
@@ -246,6 +257,18 @@ def _events_for(update: Mapping[str, Any]) -> list[AgentEvent]:
                 rows=execution.rows,
                 row_count=execution.row_count,
                 truncated=execution.truncated,
+            )
+        )
+    # Emitted before the prose so the client has the table and its citations in
+    # hand by the time the summary arrives.
+    web_table = update.get("web_table")
+    if web_table is not None and not web_table.is_empty():
+        events.append(
+            WebTableEvent(
+                columns=web_table.columns,
+                rows=[{"values": list(r.values), "source": r.source_index} for r in web_table.rows],
+                row_count=web_table.row_count,
+                caveat=web_table.caveat,
             )
         )
     explanation = update.get("explanation")

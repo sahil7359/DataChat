@@ -152,6 +152,47 @@ class WebResult:
 
 
 @dataclass(frozen=True, slots=True)
+class WebTableRow:
+    """One extracted row. ``values`` aligns positionally with ``WebTable.columns``
+    and carries ``None`` wherever the sources did not state a value.
+
+    ``source_index`` is a 1-based index into the ``WebResult`` tuple the row was
+    read from. It is mandatory: a row nobody can attribute is a row we drop.
+    """
+
+    values: tuple[object, ...]
+    source_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class WebTable:
+    """Tabular data read out of untrusted web snippets.
+
+    why: deliberately *not* an ``ExecutionResult``. Governed SQL output is verified
+    against a read-only role and an AST guardrail; this is a language model's
+    reading of search snippets. Giving them one type would make them substitutable
+    in the UI, the report and the cache, and the whole safety story of this project
+    rests on a user being able to tell them apart.
+    alt: reuse ExecutionResult with a provenance flag (fewer types, but one missed
+    flag check silently launders web scrapings as governed data).
+
+    ``caveat`` carries the model's own statement of what is missing or uncertain,
+    which is rendered with the table rather than buried.
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[WebTableRow, ...]
+    caveat: str = ""
+
+    @property
+    def row_count(self) -> int:
+        return len(self.rows)
+
+    def is_empty(self) -> bool:
+        return not self.rows or not self.columns
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationResult:
     ok: bool
     plausible: bool
