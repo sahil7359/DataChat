@@ -177,6 +177,36 @@ async def test_pipeline_gate_scores_perfectly_with_a_scripted_model(
         await engine.dispose()
 
 
+def _active_provider(settings: object) -> tuple[str, object]:
+    """Which real provider the quality gate should measure, and its adapter.
+
+    Mirrors ``Container.llm``: a present Ollama leads, otherwise the first cloud
+    key that is set. Returns a ``vendor/model`` id used to look up the matching
+    baseline, because execution accuracy is as much a property of the model as of
+    the pipeline — one blended number across providers would mean nothing.
+    """
+    import httpx
+
+    from app.infrastructure.llm.groq import GroqAdapter
+    from app.infrastructure.llm.ollama import OllamaAdapter
+
+    client = httpx.AsyncClient()
+    if settings.ollama_enabled:  # type: ignore[attr-defined]
+        model = settings.ollama_model  # type: ignore[attr-defined]
+        return f"ollama/{model}", OllamaAdapter(
+            client,
+            settings.ollama_api_key.get_secret_value(),  # type: ignore[attr-defined]
+            base_url=settings.ollama_base_url,  # type: ignore[attr-defined]
+            model=model,
+            timeout_s=180.0,
+        )
+    groq_key = settings.groq_api_key.get_secret_value()  # type: ignore[attr-defined]
+    if groq_key:
+        adapter = GroqAdapter(client, groq_key, timeout_s=180.0)
+        return f"groq/{adapter._model}", adapter
+    raise pytest.skip("no real provider configured: enable Ollama or set a Groq key")
+
+
 @pytest.mark.eval_real
 @pytest.mark.skipif(
     os.getenv("DATACHAT_EVAL_REAL") != "1",
@@ -185,36 +215,40 @@ async def test_pipeline_gate_scores_perfectly_with_a_scripted_model(
 async def test_real_model_does_not_regress_against_the_committed_baseline(
     migrated_sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
-    import httpx
-
-    from app.infrastructure.llm.ollama import OllamaAdapter
-
-    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    document = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     settings = get_settings()
+    provider_id, llm = _active_provider(settings)
+
+    baselines = document["baselines"]
+    if provider_id not in baselines:
+        pytest.skip(
+            f"no committed baseline for {provider_id!r}. Measure one first, then add it to "
+            f"eval_baseline.json. Known: {sorted(baselines)}"
+        )
+    baseline = baselines[provider_id]
 
     embedder = LocalHashEmbeddingProvider(dim=768)
     await _seed(migrated_sessionmaker, embedder)
 
     engine = _executor_engine()
-    client = httpx.AsyncClient()
     try:
-        llm = OllamaAdapter(
-            client,
-            settings.ollama_api_key.get_secret_value(),
-            base_url=settings.ollama_base_url,
-            model=settings.ollama_model,
-            timeout_s=180.0,
-        )
         harness = _build_harness(migrated_sessionmaker, embedder, llm, engine)
         report = await harness.evaluate(GOLDEN_SET)
 
-        tolerance = float(baseline["regression_tolerance"])
+        print(
+            f"\n[{provider_id}] execution_accuracy={report.execution_accuracy:.4f} "
+            f"refusal_accuracy={report.refusal_accuracy:.4f} "
+            f"sql_valid_rate={report.sql_valid_rate:.4f} "
+            f"faithfulness={report.faithfulness:.4f}"
+        )
+
+        tolerance = float(document["regression_tolerance"])
         floor = float(baseline["execution_accuracy"])
         assert not report.regressed(floor, tolerance), (
-            f"execution_accuracy {report.execution_accuracy:.4f} regressed more than "
-            f"{tolerance} below the committed baseline {floor:.4f}"
+            f"[{provider_id}] execution_accuracy {report.execution_accuracy:.4f} regressed "
+            f"more than {tolerance} below the committed baseline {floor:.4f}"
         )
         assert report.refusal_accuracy >= float(baseline["refusal_accuracy"]) - tolerance
     finally:
-        await client.aclose()
+        await llm._client.aclose()
         await engine.dispose()

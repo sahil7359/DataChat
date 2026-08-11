@@ -1,19 +1,23 @@
 {
   "_comment": "Measured, not aspirational. Regenerate with `make eval-real` and commit the new file in the same PR as the change that moved it. Never hand-edit a score.",
-  "measured_at": "2026-08-11",
-  "provider": "ollama",
-  "model": "qwen2.5:7b-instruct",
-  "temperature": 0.0,
-  "dataset": "seed",
+  "_why_per_provider": "Execution accuracy is a property of the model as much as the pipeline, so one blended number would be meaningless. The gate compares the active provider against its own baseline; swapping providers is a deliberate act that needs its own measurement, not a silent pass or fail.",
+
   "golden_set_size": 26,
   "n_answerable": 21,
   "n_refusal": 5,
 
-  "execution_accuracy": 0.6667,
-  "refusal_accuracy": 0.8,
-  "sql_valid_rate": 0.9524,
-  "faithfulness": 0.8571,
-
   "regression_tolerance": 0.05,
-  "_tolerance_rationale": "One answerable case is worth 1/21 = 0.0476. A tolerance below that fires on a single case flipping, which is noise, not regression; 0.05 absorbs exactly one case and blocks two (0.0952). Sampling variance is not the driver here - temperature is 0.0 - so the tolerance is sized by set granularity."
+  "_tolerance_rationale": "One answerable case is worth 1/21 = 0.0476. A tolerance below that fires on a single case flipping, which is noise, not regression; 0.05 absorbs exactly one case and blocks two (0.0952). Sampling variance is not the driver - temperature is 0.0 - so the tolerance is sized by set granularity. If the set grows to 50 answerable cases, one case becomes 0.02 and this should tighten.",
+
+  "baselines": {
+    "ollama/qwen2.5:7b-instruct": {
+      "measured_at": "2026-08-11",
+      "temperature": 0.0,
+      "dataset": "seed",
+      "execution_accuracy": 0.6667,
+      "refusal_accuracy": 0.8,
+      "sql_valid_rate": 0.9524,
+      "faithfulness": 0.8571
+    }
+  }
 }
