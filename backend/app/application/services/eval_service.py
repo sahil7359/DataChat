@@ -1,15 +1,26 @@
 """Evaluation harness (FR-20).
 
-Scores the agent on a golden NL->SQL set with three scorers:
-- ``execution_accuracy`` — result-set equality between the agent's query and the
-  gold query (BIRD-style; compares *values*, not SQL strings, so two different
-  correct queries both count as correct).
-- ``sql_valid`` — the predicted SQL parses and passes the guardrail.
-- ``explanation_faithfulness`` — an LLM judge rates whether the prose is grounded
-  in the returned rows.
+Scores the agent on a golden NL->SQL set. Two kinds of case, scored differently:
+
+- **answerable** — the question has a correct answer in the governed data.
+  Scored by ``execution_accuracy``: result-set equality between the agent's query
+  and the gold query (BIRD-style; compares *values*, not SQL strings, so two
+  different correct queries both count as correct).
+- **refusal** — the question is out of scope (unknown country, indicator we do not
+  carry, or too ambiguous to answer). There is no gold SQL, so result-set equality
+  is meaningless. Scored by ``refusal_accuracy``: did the agent decline to invent
+  an answer? An agent that confidently answers an unanswerable question is the
+  failure mode that matters, and averaging it into execution_accuracy would hide it.
+
+why: two metrics over two disjoint case sets, rather than one blended number.
+alt: score refusals as execution_accuracy=0 (simpler, but then a perfect refusal
+and a wrong answer are indistinguishable, which is exactly what we need to tell apart).
+
+Also reported: ``sql_valid_rate`` (generated SQL parses and passes the AST
+guardrail) and ``faithfulness`` (LLM judge: is the prose grounded in the rows).
 
 All dependencies are injected, so the harness is unit-testable with fakes and the
-golden set runs against the real seed DB in CI (`pytest -m eval`).
+golden set runs against the real seed DB.
 """
 
 from __future__ import annotations
@@ -28,31 +39,55 @@ FAITHFULNESS_VERSION = "faithfulness_judge@v1"
 
 @dataclass(frozen=True, slots=True)
 class EvalCase:
+    """One golden case. ``gold_sql`` is empty exactly when ``expect_refusal`` is set."""
+
     question: str
-    gold_sql: str
+    gold_sql: str = ""
+    expect_refusal: bool = False
     notes: str = ""
+
+    def __post_init__(self) -> None:
+        if self.expect_refusal and self.gold_sql:
+            raise ValueError(f"refusal case must not carry gold SQL: {self.question!r}")
+        if not self.expect_refusal and not self.gold_sql:
+            raise ValueError(f"answerable case needs gold SQL: {self.question!r}")
 
 
 @dataclass(frozen=True, slots=True)
 class CaseResult:
     question: str
     predicted_sql: str | None
+    expected_refusal: bool
+    refused: bool
     execution_match: bool
     sql_valid: bool
     faithfulness: float
     failure_reason: str | None = None
 
+    @property
+    def passed(self) -> bool:
+        if self.expected_refusal:
+            return self.refused
+        return self.execution_match
+
 
 @dataclass(frozen=True, slots=True)
 class EvalReport:
     execution_accuracy: float
+    refusal_accuracy: float
     sql_valid_rate: float
     faithfulness: float
-    guardrail_pass_rate: float
+    n_answerable: int = 0
+    n_refusal: int = 0
     results: tuple[CaseResult, ...] = field(default_factory=tuple)
 
-    def regressed(self, baseline: float) -> bool:
-        return self.execution_accuracy < baseline
+    def regressed(self, baseline: float, tolerance: float) -> bool:
+        """True when accuracy fell more than ``tolerance`` below the committed baseline.
+
+        Tolerance exists because a golden set is granular: with n cases, one case
+        flipping moves the score by 1/n. A gate tighter than that fires on noise.
+        """
+        return self.execution_accuracy < baseline - tolerance
 
 
 def compare_result_sets(a: ExecutionResult | None, b: ExecutionResult | None) -> bool:
@@ -125,6 +160,19 @@ class EvalService:
         state = await self._query_service.run(case.question)
         predicted_sql = state.get("candidate_sql")
         predicted_exec = state.get("execution")
+        refused = _refused(state)
+
+        if case.expect_refusal:
+            return CaseResult(
+                question=case.question,
+                predicted_sql=predicted_sql,
+                expected_refusal=True,
+                refused=refused,
+                execution_match=False,
+                sql_valid=bool(predicted_sql) and self._validator.validate(predicted_sql).ok,
+                faithfulness=0.0,
+                failure_reason=None if refused else "answered an out-of-scope question",
+            )
 
         gold = await self._gold_executor.execute(case.gold_sql)
         gold_exec = gold.value if isinstance(gold, Ok) else None
@@ -136,6 +184,8 @@ class EvalService:
         return CaseResult(
             question=case.question,
             predicted_sql=predicted_sql,
+            expected_refusal=False,
+            refused=refused,
             execution_match=match,
             sql_valid=valid,
             faithfulness=faithfulness,
@@ -143,13 +193,34 @@ class EvalService:
         )
 
 
+def _refused(state: object) -> bool:
+    """The agent declined to produce a data answer.
+
+    Covers all three ways that happens: an error//guardrail dead-end, a clarify
+    interrupt (the run pauses without an execution), and a query that ran but
+    matched nothing.
+    """
+    get = state.get  # type: ignore[attr-defined]
+    if get("error_code") is not None or get("error") is not None:
+        return True
+    execution = get("execution")
+    return execution is None or execution.is_empty()
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator else 0.0
+
+
 def _aggregate(results: list[CaseResult]) -> EvalReport:
-    n = len(results) or 1
+    answerable = [r for r in results if not r.expected_refusal]
+    refusals = [r for r in results if r.expected_refusal]
     return EvalReport(
-        execution_accuracy=sum(r.execution_match for r in results) / n,
-        sql_valid_rate=sum(r.sql_valid for r in results) / n,
-        faithfulness=sum(r.faithfulness for r in results) / n,
-        guardrail_pass_rate=sum(r.sql_valid for r in results) / n,
+        execution_accuracy=_rate(sum(r.execution_match for r in answerable), len(answerable)),
+        refusal_accuracy=_rate(sum(r.refused for r in refusals), len(refusals)),
+        sql_valid_rate=_rate(sum(r.sql_valid for r in answerable), len(answerable)),
+        faithfulness=_rate(sum(r.faithfulness for r in answerable), len(answerable)),  # type: ignore[arg-type]
+        n_answerable=len(answerable),
+        n_refusal=len(refusals),
         results=tuple(results),
     )
 

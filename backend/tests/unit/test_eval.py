@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.application.agent.state import AgentState
 from app.application.services.eval_service import (
     EvalCase,
+    EvalReport,
     EvalService,
     FaithfulnessJudge,
     compare_result_sets,
@@ -68,7 +69,8 @@ async def test_perfect_run_scores_full_accuracy() -> None:
     assert report.execution_accuracy == 1.0
     assert report.sql_valid_rate == 1.0
     assert report.faithfulness == 1.0
-    assert not report.regressed(baseline=0.7)
+    assert report.n_answerable == 1
+    assert not report.regressed(baseline=0.7, tolerance=0.05)
 
 
 async def test_wrong_result_flags_regression() -> None:
@@ -83,7 +85,77 @@ async def test_wrong_result_flags_regression() -> None:
     report = await service.evaluate(cases)
 
     assert report.execution_accuracy == 0.0
-    assert report.regressed(baseline=0.7)  # below threshold -> CI would fail
+    assert report.regressed(baseline=0.7, tolerance=0.05)  # below floor -> gate fails
+
+
+async def test_tolerance_absorbs_a_small_dip_but_not_a_real_drop() -> None:
+    """The tolerance is the whole point of the gate: it must forgive one case
+    flipping and still catch a genuine slide."""
+    report = EvalReport(
+        execution_accuracy=0.62, refusal_accuracy=1.0, sql_valid_rate=1.0, faithfulness=1.0
+    )
+
+    assert not report.regressed(baseline=0.6667, tolerance=0.05)  # ~one case of drift
+    assert report.regressed(baseline=0.6667, tolerance=0.02)  # tighter gate catches it
+
+
+async def test_refusal_cases_score_separately_from_execution_accuracy() -> None:
+    """A correct refusal must not be averaged in as an execution miss, and a
+    confident answer to an unanswerable question must be caught."""
+    cases = [
+        EvalCase(question="refuse-me", expect_refusal=True, notes="out of scope"),
+        EvalCase(question="answer-me", gold_sql="SELECT a, b FROM owid_co2 LIMIT 1"),
+    ]
+    rows = (("QAT", 37.6),)
+    service = EvalService(
+        ScriptedQueryService(
+            {
+                # empty result set == the agent declined to invent an answer
+                "refuse-me": {
+                    "candidate_sql": "SELECT a, b FROM owid_co2 LIMIT 1",
+                    "execution": _result(()),
+                    "explanation": "",
+                },
+                "answer-me": _state("SELECT a, b FROM owid_co2 LIMIT 1", rows),
+            }  # type: ignore[arg-type]
+        ),
+        FakeQueryExecutor(result=_result(rows)),
+        SqlValidatorChain(row_cap=1000),
+        FixedJudge(1.0),
+    )
+
+    report = await service.evaluate(cases)
+
+    assert report.n_answerable == 1
+    assert report.n_refusal == 1
+    assert report.execution_accuracy == 1.0  # the refusal is not averaged in
+    assert report.refusal_accuracy == 1.0
+
+
+async def test_answering_an_unanswerable_question_fails_the_refusal_score() -> None:
+    cases = [EvalCase(question="refuse-me", expect_refusal=True, notes="out of scope")]
+    service = EvalService(
+        ScriptedQueryService(
+            {"refuse-me": _state("SELECT a, b FROM owid_co2 LIMIT 1", (("QAT", 37.6),))}  # type: ignore[arg-type]
+        ),
+        FakeQueryExecutor(result=_result((("QAT", 37.6),))),
+        SqlValidatorChain(row_cap=1000),
+        FixedJudge(1.0),
+    )
+
+    report = await service.evaluate(cases)
+
+    assert report.refusal_accuracy == 0.0
+    assert report.results[0].failure_reason == "answered an out-of-scope question"
+
+
+def test_a_case_cannot_be_both_answerable_and_a_refusal() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        EvalCase(question="q", gold_sql="SELECT 1", expect_refusal=True)
+    with pytest.raises(ValueError):
+        EvalCase(question="q")
 
 
 async def test_faithfulness_judge_parses_score() -> None:

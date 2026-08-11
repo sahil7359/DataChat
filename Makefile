@@ -31,7 +31,7 @@ type: ## mypy --strict (backend)
 	bash $(BACKEND)/scripts/typecheck.sh
 
 test: ## Unit tests (no live services)
-	cd $(BACKEND) && uv run python -m pytest -m "not integration and not eval"
+	cd $(BACKEND) && uv run python -m pytest -m "not integration and not eval and not eval_real"
 
 test-cov: ## Unit + integration with coverage gate on domain/application
 	cd $(BACKEND) && uv run python -m pytest --cov --cov-report=term-missing
@@ -41,8 +41,11 @@ sec: ## Security scanners: bandit, pip-audit, gitleaks (semgrep runs in CI)
 	cd $(BACKEND) && uv run python -m pip_audit || true
 	gitleaks dir --no-banner --redact -c .gitleaks.toml .
 
-eval: ## Agent golden-set evaluation (execution accuracy regression gate)
+eval: ## Deterministic golden-set pipeline gate (scripted LLM, free, runs in CI)
 	cd $(BACKEND) && uv run python -m pytest -m eval
+
+eval-real: ## Quality gate vs eval_baseline.json using a real provider (needs Ollama or keys)
+	cd $(BACKEND) && DATACHAT_EVAL_REAL=1 uv run python -m pytest -m eval_real -s
 
 ingest: ## Load the seed open-data slice locally
 	cd $(BACKEND) && uv run python -m ingestion.run --dataset seed

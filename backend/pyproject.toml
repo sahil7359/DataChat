@@ -111,9 +111,9 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "unit: pure unit tests, no external services",
     "integration: needs a live Postgres/Redis (Docker/CI)",
-    "eval: agent golden-set evaluation (needs LLM stack)",
+    "eval: deterministic golden-set pipeline gate (scripted LLM, runs in CI)",
+    "eval_real: golden-set quality gate against a real provider (opt-in, needs a GPU or keys)",
     "security: OWASP LLM/Agentic security cases",
 ]
 addopts = "-q --strict-markers"
