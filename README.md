@@ -16,9 +16,18 @@ An agentic natural-language analytics platform over public datasets — built as
 ![Cost](https://img.shields.io/badge/cost-%240%2Fmonth-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-[**Live demo**](#) · [**Walkthrough video**](#) · [Architecture](#architecture) · [Design deep-dive](./Design.md)
+[**Live API**](https://datachat-api-wmpd.onrender.com/health) · [**API docs**](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design deep-dive](./Design.md)
 
-<!-- 👉 Drop the live URL + a 60–90s Loom/YouTube link above once deployed (GOLIVE.md). -->
+<!-- 👉 Add the Vercel UI link and a 60–90s walkthrough video above once the frontend is deployed (GOLIVE.md §6). -->
+
+Try it without any setup — streams Server-Sent Events, first call after idle takes
+~50s while the free instance wakes:
+
+```bash
+curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Which 5 countries had the highest CO2 per capita in 2022?"}'
+```
 
 </div>
 
