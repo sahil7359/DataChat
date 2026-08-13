@@ -90,7 +90,7 @@ def test_bare_numbers_are_not_read_as_years(scope: DataScope) -> None:
 def test_the_message_names_the_boundary(scope: DataScope) -> None:
     described = scope.describe()
     assert "15 countries" in described
-    assert "2021, 2022" in described
+    assert "covering 2021-2022" in described
     assert "Qatar" in described  # a loaded country is listed by name
     assert "World Bank" in described  # the measures are named
 

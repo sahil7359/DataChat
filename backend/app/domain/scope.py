@@ -89,13 +89,20 @@ class DataScope:
         return None
 
     def describe(self) -> str:
-        """One paragraph naming the boundary, for the refusal message."""
-        countries = ", ".join(self.display_names)
-        years = ", ".join(str(y) for y in sorted(self.years))
-        indicators = ", ".join(self.indicator_labels)
+        """Name the boundary, for the refusal message.
+
+        why the shape matters: an earlier version rendered as
+        "15 countries, 2021, 2022", which reads as a three-item list rather than
+        a count and a range, and put every measure on one line so the commas
+        inside each measure ran together with the commas between them. A refusal
+        is only useful if the reader can see the boundary at a glance.
+        """
+        years = sorted(self.years)
+        span = str(years[0]) if len(years) == 1 else f"{years[0]}-{years[-1]}"
+        measures = "\n".join(f"  - {label}" for label in self.indicator_labels)
         return (
-            f"This demo runs on a deliberately small slice of open data — "
-            f"{len(self.display_names)} countries, {years}.\n\n"
-            f"Countries: {countries}.\n"
-            f"Measures: {indicators}."
+            f"This demo runs on a deliberately small slice of open data: "
+            f"{len(self.display_names)} countries, covering {span}.\n\n"
+            f"Countries: {', '.join(self.display_names)}.\n\n"
+            f"Measures:\n{measures}"
         )

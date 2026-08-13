@@ -403,6 +403,12 @@ claimed as improved.
 
 [PRD](./PRD.md) · [TechSpec](./TechSpec.md) · [AppFlow](./AppFlow.md) · [Design](./Design.md) · [Schema](./Schema.md) · [ImplementationPlan](./ImplementationPlan.md) · [Tracker](./Tracker.md) · [Rules](./Rules.md) · [Security (OWASP matrix)](./SECURITY.md) · [Go-live checklist](./GOLIVE.md) · [Deploy walkthrough](./DEPLOY.md)
 
-## License
+## License & data attribution
 
-MIT — see [LICENSE](./LICENSE).
+**Code:** MIT — see [LICENSE](./LICENSE).
+
+**Data:** not covered by the MIT licence. The bundled seed slice redistributes
+roughly 90 values from the **World Bank** (World Development Indicators) and
+**Our World in Data** (CO₂ emissions), both used with attribution under their own
+terms. Details, links and an accuracy caveat in
+[DATA-SOURCES.md](./DATA-SOURCES.md).
