@@ -22,7 +22,11 @@ services:
     autoDeploy: true
     # Runs DB migrations + seed on each deploy (both idempotent), then serves on
     # the port Render assigns — so you never run a migration by hand.
-    dockerCommand: sh -c "alembic upgrade head && python -m ingestion.run --dataset seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    #
+    # Kept in a script, not inline: Render runs this through a shell, so an
+    # inline `sh -c "a && b && c"` has its quotes passed through literally and
+    # the shell looks for a single command named "a && b && c" — exit 127.
+    dockerCommand: sh ./start.sh
     envVars:
       - key: DATACHAT_USE_MOCKS
         value: "false"

@@ -1,0 +1,7 @@
+# Shell scripts must keep LF endings. A CRLF start.sh fails inside a Linux
+# container with an opaque "not found" on the interpreter line, which looks
+# nothing like a line-ending problem.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
