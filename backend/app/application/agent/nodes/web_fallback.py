@@ -26,7 +26,7 @@ from app.application.prompts.web_table import (
     build_web_table_messages,
     parse_web_table,
 )
-from app.domain.entities import LLMRequest, WebTable
+from app.domain.entities import LLMRequest, WebResult, WebTable
 from app.domain.ports.llm import LLMProvider
 from app.domain.ports.tracing import Tracer
 from app.domain.ports.web_search import WebSearchProvider
@@ -71,7 +71,7 @@ class WebFallbackNode(BaseNode):
             update["web_table"] = table
         return update
 
-    async def _extract_table(self, question: str, results: tuple) -> WebTable:
+    async def _extract_table(self, question: str, results: tuple[WebResult, ...]) -> WebTable:
         response = await self._llm.complete(
             LLMRequest(
                 messages=build_web_table_messages(question, results),
@@ -83,7 +83,7 @@ class WebFallbackNode(BaseNode):
         # row citing a source outside the ones we actually showed the model.
         return parse_web_table(response.text, source_count=len(results))
 
-    async def _summarise(self, question: str, results: tuple) -> str:
+    async def _summarise(self, question: str, results: tuple[WebResult, ...]) -> str:
         response = await self._llm.complete(
             LLMRequest(
                 messages=build_web_answer_messages(question, results),

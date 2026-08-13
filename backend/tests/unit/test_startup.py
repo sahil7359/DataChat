@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import cast
 
 import pytest
 
 from app.config import Settings
 from app.container import Container
+from app.domain.ports.cache import Cache
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.main import _register_prompts_bounded
 
@@ -80,8 +82,8 @@ def test_a_deploy_with_no_provider_configured_logs_loudly(
     """
     settings = Settings(use_mocks=False, ollama_enabled=False, gemini_api_key="", groq_api_key="")
     container = Container.__new__(Container)  # skip __init__: no DB/Redis needed here
-    container._settings = settings  # type: ignore[attr-defined]
-    container._cache = None  # type: ignore[attr-defined]
+    container._settings = settings
+    container._cache = cast(Cache, None)  # never touched on the no-provider path
 
     provider = container.llm()
 
@@ -93,7 +95,7 @@ def test_a_deploy_with_no_provider_configured_logs_loudly(
 
 def test_mock_mode_does_not_warn(capsys: pytest.CaptureFixture[str]) -> None:
     container = Container.__new__(Container)
-    container._settings = Settings(use_mocks=True)  # type: ignore[attr-defined]
+    container._settings = Settings(use_mocks=True)
 
     provider = container.llm()
 

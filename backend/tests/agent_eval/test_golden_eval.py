@@ -28,6 +28,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
@@ -177,7 +178,7 @@ async def test_pipeline_gate_scores_perfectly_with_a_scripted_model(
         await engine.dispose()
 
 
-def _active_provider(settings: object) -> tuple[str, object]:
+def _active_provider(settings: object) -> tuple[str, Any]:
     """Which real provider the quality gate should measure, and its adapter.
 
     Mirrors ``Container.llm``: a present Ollama leads, otherwise the first cloud

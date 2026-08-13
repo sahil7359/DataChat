@@ -108,6 +108,7 @@ AgentEvent = (
     | RowsEvent
     | ExplanationDeltaEvent
     | ChartSpecEvent
+    | WebTableEvent
     | WebSourcesEvent
     | ErrorEvent
     | DoneEvent

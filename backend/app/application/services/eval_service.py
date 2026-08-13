@@ -169,7 +169,7 @@ class EvalService:
                 expected_refusal=True,
                 refused=refused,
                 execution_match=False,
-                sql_valid=bool(predicted_sql) and self._validator.validate(predicted_sql).ok,
+                sql_valid=bool(predicted_sql) and self._validator.validate(predicted_sql or "").ok,
                 faithfulness=0.0,
                 failure_reason=None if refused else "answered an out-of-scope question",
             )
@@ -207,7 +207,7 @@ def _refused(state: object) -> bool:
     return execution is None or execution.is_empty()
 
 
-def _rate(numerator: int, denominator: int) -> float:
+def _rate(numerator: float, denominator: int) -> float:
     return numerator / denominator if denominator else 0.0
 
 
@@ -218,7 +218,7 @@ def _aggregate(results: list[CaseResult]) -> EvalReport:
         execution_accuracy=_rate(sum(r.execution_match for r in answerable), len(answerable)),
         refusal_accuracy=_rate(sum(r.refused for r in refusals), len(refusals)),
         sql_valid_rate=_rate(sum(r.sql_valid for r in answerable), len(answerable)),
-        faithfulness=_rate(sum(r.faithfulness for r in answerable), len(answerable)),  # type: ignore[arg-type]
+        faithfulness=_rate(sum(r.faithfulness for r in answerable), len(answerable)),
         n_answerable=len(answerable),
         n_refusal=len(refusals),
         results=tuple(results),
