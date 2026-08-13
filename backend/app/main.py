@@ -141,20 +141,27 @@ async def _build_checkpointer(
     ceiling, and the executor holds its own separate pool.
     """
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from psycopg import AsyncConnection
+    from psycopg.rows import DictRow, dict_row
     from psycopg_pool import AsyncConnectionPool
 
     conn = settings.database_url.replace("+asyncpg", "")
-    pool = await stack.enter_async_context(
-        AsyncConnectionPool(
-            conninfo=conn,
-            min_size=1,
-            max_size=settings.checkpointer_pool_size,
+    pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
+        conninfo=conn,
+        min_size=1,
+        max_size=settings.checkpointer_pool_size,
+        kwargs={
             # The saver issues its own transactions; autocommit avoids wrapping
             # every checkpoint write in an extra outer transaction.
-            kwargs={"autocommit": True, "prepare_threshold": 0},
-            open=False,
-        )
+            "autocommit": True,
+            "prepare_threshold": 0,
+            # AsyncPostgresSaver reads rows by column name, so the pool must hand
+            # it dict rows rather than psycopg's default tuples.
+            "row_factory": dict_row,
+        },
+        open=False,
     )
+    await stack.enter_async_context(pool)
     await pool.open(wait=True)
     saver = AsyncPostgresSaver(pool)
     await saver.setup()
