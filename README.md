@@ -125,9 +125,25 @@ To use real models later, set `USE_MOCKS=false` and add keys — see **[GOLIVE.m
 
 ## Live deployment
 
-<!-- 👉 Fill URLs after GOLIVE.md -->
-- **Frontend:** Vercel (Hobby) · **Backend:** Render (free) · **DB:** Neon · **Cache:** Upstash · **MLflow:** Hugging Face Space
-- **Cold-start caveat:** on the free tier the backend sleeps after ~15 min idle and Neon scales to zero. First request after idle shows a brief "waking up" state (~30–60s); a keep-warm ping minimises it. This is an intentional, documented trade-off of a genuinely $0 deployment.
+| Component | Host | URL |
+|---|---|---|
+| Frontend | Vercel (Hobby) | <https://data-chat-seven.vercel.app> |
+| Backend | Render (free) | <https://datachat-api-wmpd.onrender.com> |
+| Database | Neon (Postgres 16 + pgvector) | — |
+| Cache / rate limit | Upstash Redis | — |
+| Model | Groq `llama-3.3-70b-versatile` | — |
+
+**Total cost: $0/month.** Every component is a permanent free tier.
+
+- **Provider choice.** Groq serves the demo rather than the self-hosted Ollama, on
+  purpose: a public URL has to answer when my PC is off, and a quick Cloudflare
+  tunnel changes hostname on every restart. Ollama is the same port behind the
+  same router and is one env flag away — see [GOLIVE.md](./GOLIVE.md).
+- **Cold-start caveat.** The backend sleeps after ~15 min idle and Neon scales to
+  zero, so the first request after idle takes ~50s and the UI shows a "waking"
+  state. A keep-warm ping every 12 minutes mitigates it. Durable LangGraph
+  checkpoints mean an in-flight human-approval step survives the sleep. This is a
+  documented trade-off of a genuinely $0 deploy, not a defect.
 
 ## What I learned / engineering highlights
 
