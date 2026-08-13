@@ -86,8 +86,18 @@ async def _safe_frames(events: AsyncIterator[AgentEvent], request_id: str) -> As
             ErrorEvent(code="providers_unavailable", message="Busy right now — try again shortly.")
         )
         yield format_sse(DoneEvent(run_id="", trace_id=request_id))
-    except Exception:
-        _log.error("stream_failed", trace_id=request_id)
+    except Exception as exc:
+        # exc_info, because "stream_failed" alone is unactionable: it says a turn
+        # broke without saying how, and the client deliberately only ever sees
+        # "Something went wrong". Server-side logs are the one place the cause can
+        # live, so the traceback belongs here. Nothing extra reaches the user.
+        _log.error(
+            "stream_failed",
+            trace_id=request_id,
+            error=type(exc).__name__,
+            detail=str(exc)[:500],
+            exc_info=True,
+        )
         yield format_sse(ErrorEvent(code="internal_error", message="Something went wrong."))
         yield format_sse(DoneEvent(run_id="", trace_id=request_id))
 

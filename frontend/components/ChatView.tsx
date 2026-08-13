@@ -7,6 +7,7 @@ import { ChartRenderer } from "@/components/ChartRenderer";
 import { ResultsTable } from "@/components/ResultsTable";
 import { useChat } from "@/hooks/useChat";
 import { fetchDatasets, reportCsvUrl, reportMarkdownUrl } from "@/lib/api";
+import { EXAMPLES, SCOPE_LINE } from "@/lib/examples";
 import type { Dataset } from "@/lib/types";
 
 export function ChatView() {
@@ -24,6 +25,13 @@ export function ChatView() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     void ask(question, approveSql);
+  };
+
+  // Populate the box *and* submit: a chip that only fills the input makes the
+  // visitor do the work twice, and the point is a one-click first answer.
+  const runExample = (q: string) => {
+    setQuestion(q);
+    void ask(q, approveSql);
   };
 
   return (
@@ -45,7 +53,33 @@ export function ChatView() {
         </section>
       )}
 
+      {!state.question && (
+        <section aria-label="Example questions" className="flex flex-col gap-2">
+          <p className="text-sm opacity-70">Try one of these:</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {EXAMPLES.map((ex) => (
+              <button
+                key={ex.question}
+                type="button"
+                onClick={() => runExample(ex.question)}
+                disabled={state.active}
+                className={`rounded-lg border p-3 text-left transition hover:bg-white/5 disabled:opacity-50 ${
+                  ex.refusal ? "border-amber-400/30" : "border-white/10"
+                }`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium">{ex.label}</span>
+                  <span className="shrink-0 text-[11px] opacity-50">{ex.hint}</span>
+                </span>
+                <span className="mt-1 block text-xs opacity-70">{ex.question}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <form onSubmit={submit} className="flex flex-col gap-3">
+        <p className="text-xs opacity-55">{SCOPE_LINE}</p>
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
