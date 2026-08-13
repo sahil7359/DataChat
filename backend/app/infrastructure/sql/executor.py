@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import time
 
+from asyncpg import PostgresError
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -46,6 +47,14 @@ class ReadOnlyQueryExecutor:
             return Err(_map_db_error(exc))
         except SQLAlchemyError:  # pragma: no cover - defensive
             return Err(ExecutionError("query failed", code="db_error"))
+        except PostgresError as exc:
+            # why: on the streaming path a driver error can surface while rows are
+            # being buffered, *after* SQLAlchemy's wrapper has run, so it arrives
+            # as a native asyncpg exception rather than a DBAPIError. The read-only
+            # role rejecting a write is exactly that case — the last line of
+            # defence raising instead of returning Err would turn a correctly
+            # blocked write into an unhandled error.
+            return Err(ExecutionError(str(exc), code=getattr(exc, "sqlstate", None) or "db_error"))
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
         truncated = len(rows) > self._row_cap

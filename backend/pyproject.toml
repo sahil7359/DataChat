@@ -107,7 +107,17 @@ mypy_path = "."
 exclude = ["migrations/versions/"]
 
 [[tool.mypy.overrides]]
-module = ["sqlglot.*", "langgraph.*", "langchain_core.*", "mlflow.*", "pgvector.*", "ddgs.*"]
+module = [
+    "sqlglot.*",
+    "langgraph.*",
+    "langchain_core.*",
+    "mlflow.*",
+    "pgvector.*",
+    "ddgs.*",
+    # Ships no py.typed marker; imported directly in the executor to catch driver
+    # errors that escape SQLAlchemy's wrapper on the streaming path.
+    "asyncpg.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

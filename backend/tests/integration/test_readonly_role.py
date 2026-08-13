@@ -19,9 +19,18 @@ pytestmark = pytest.mark.integration
 
 
 def _executor_url() -> str:
+    """Build the executor DSN.
+
+    why ``render_as_string(hide_password=False)`` and not ``str(url)``: SQLAlchemy's
+    ``URL.__str__`` masks the password as ``***``, so ``str(url)`` produced a DSN
+    that authenticated with the literal three asterisks. It failed as
+    ``InvalidPasswordError: password authentication failed for user
+    "datachat_exec"`` — which reads like a broken role or migration, not a masked
+    string, and sent us looking at the role-creation migration instead of here.
+    """
     admin = make_url(os.environ["DATACHAT_TEST_DATABASE_URL"])
     pw = get_settings().executor_role_password.get_secret_value()
-    return str(admin.set(username="datachat_exec", password=pw))
+    return admin.set(username="datachat_exec", password=pw).render_as_string(hide_password=False)
 
 
 async def test_readonly_role_can_select_analytics(
