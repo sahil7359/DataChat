@@ -8,6 +8,68 @@ For *how the system works* rather than why it changed, see [FLOW.md](./FLOW.md).
 
 ---
 
+## 2026-08-13 — Live
+
+**https://data-chat-seven.vercel.app/** → **https://datachat-api-wmpd.onrender.com**
+
+Groq on the free tier, Neon Postgres + pgvector, Upstash Redis, Vercel frontend,
+keep-warm every 12 minutes. Verified in the browser: *"Which 3 countries had the
+lowest life expectancy in 2022?"* → Nigeria 53.6, South Africa 62.3, India 67.7,
+with the executed SQL, a Vega-Lite chart and a grounded explanation.
+
+### Four failures, and what each really was
+
+None of them said what it meant, which is the whole lesson.
+
+**1. `render.yaml not found`.** The file had never been pushed. Ten commits —
+including the one that created it — had been sitting local since 25 July. The
+GitHub repo a recruiter would have seen was missing the web fallback, the
+downloadable reports and the answer cache too.
+
+**2. `Exited with status 127`.** Render runs `dockerCommand` through a shell, so
+an inline `sh -c "a && b && c"` had its quotes passed through literally and the
+shell went looking for one command named `a && b && c`. Moved to
+`backend/start.sh` — no quoting ambiguity, and readable locally. Took `exec
+uvicorn` and `set -e` with it, so the server gets SIGTERM directly and a failed
+migration stops the container rather than serving against a half-migrated DB.
+
+**3. `error parsing value for field "cors_origins"`.** pydantic-settings
+JSON-decodes collection-typed fields at the *source*, before validators run, so a
+plain `http://localhost:3000` is a JSON syntax error. Decoding off + a validator
+that takes plain, comma-separated, or JSON.
+
+**4. UI live, every request blocked.** `CORS_ORIGINS` was
+`https://data-chat-seven.vercel.app/` — the trailing slash you get by copying a
+URL out of a dashboard. A browser `Origin` is scheme + host + port and never has a
+path, and Starlette compares exactly. The failure is one-sided and vicious: the
+API still answers 200 to curl while the browser blocks it, so it reads as "the
+frontend is broken" and sends you into the wrong codebase.
+
+why fix 3 and 4 in code rather than in the runbook: both arrive by default — the
+slash from copy-paste, the JSON from a type annotation nobody sees — and neither
+symptom points at its cause. A note in GOLIVE.md would have been a note about a
+trap rather than the removal of one.
+
+### Earned its keep
+
+The MLflow startup bound shipped two days earlier fired in production on the first
+successful boot: `prompt_register_timed_out` after 5.0s. Without it, startup
+blocks ~90s on an unreachable tracking server and Render's health check fails the
+deploy. It was written for exactly this and never tested against it until now.
+
+The `no_llm_provider_configured` guard also paid off — its *absence* from the logs
+was how I confirmed the Groq key had landed, rather than discovering it later
+through identical wrong answers.
+
+### Deliberately not deployed
+
+Ollama. A public URL must answer when the author's PC is off, and
+`cloudflared tunnel --url` issues a new hostname on every restart, so every reboot
+would mean editing the Render env and redeploying. It stays one env flag away for
+a live demo — which is a better interview moment than a link that happens to work.
+
+---
+
 ## 2026-08-11 — Making the evaluation honest
 
 ### The problem, stated plainly

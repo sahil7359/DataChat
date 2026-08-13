@@ -158,17 +158,46 @@ Leave these unset to run **Ollama-only**. (OpenRouter stays off —
 
 ---
 
-## Final checklist
+## Final checklist — **DONE 13 Aug 2026**
 
-- [ ] `DATACHAT_USE_MOCKS=false`; Ollama running + tunnel up + `DATACHAT_OLLAMA_*` set on the backend (token matches the proxy)
-- [ ] (optional) Gemini/Groq keys set as fallback
-- [ ] `alembic upgrade head` run against Neon (roles + pgvector created)
-- [ ] seed (or wdi/owid) ingested
-- [ ] backend live on Render, `/ready` returns 200
-- [ ] frontend live on Vercel, `NEXT_PUBLIC_API_BASE` points at the backend
-- [ ] CORS updated with the Vercel URL
-- [ ] keep-warm pinging `/ready`
-- [ ] `.env` is **not** committed (only `.env.example` is tracked)
+Live: **https://data-chat-seven.vercel.app/** → **https://datachat-api-wmpd.onrender.com**
 
-Drop the live URL and a short demo clip into `README.md` where the placeholders
-are, and you're done.
+- [x] `DATACHAT_USE_MOCKS=false`, with **Groq** as the provider
+- [x] `alembic upgrade head` against Neon (roles + pgvector created) — runs automatically from `backend/start.sh` on every deploy
+- [x] seed ingested (idempotent, checksum-gated, also from `start.sh`)
+- [x] backend live on Render, `/ready` returns 200
+- [x] frontend live on Vercel, `NEXT_PUBLIC_API_BASE` points at the backend
+- [x] CORS set to the Vercel origin
+- [x] keep-warm pinging `/ready` (repo variable `KEEP_WARM_URL`, every 12 min)
+- [x] `.env` is **not** committed (only `.env.example` is tracked)
+- [ ] Ollama tunnel — **deliberately not part of the deployed path**, see below
+- [ ] `docs/hero.gif` — see [docs/README.md](docs/README.md)
+- [ ] the two "YOUR WORDS" README sections, in your voice
+
+### Why Ollama is not the deployed provider
+
+A public URL has to answer when your PC is off, and `cloudflared tunnel --url`
+issues a **new random hostname on every restart** — so every reboot would mean
+editing the Render env and redeploying. Groq's free tier is the always-on
+provider; Ollama stays one env flag away for a live demo.
+
+### Four gotchas this deploy actually hit
+
+Recorded because each cost real time and none of them says what it means:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Blueprint: `render.yaml not found` | The file had never been pushed | `git push` |
+| `Exited with status 127` | Render shells `dockerCommand` already, so an inline `sh -c "a && b"` looked for one command named `a && b` | Moved to `backend/start.sh` |
+| `error parsing value for field "cors_origins"` | pydantic-settings JSON-decodes list fields, so a plain URL is a JSON syntax error | Config now takes plain / comma-separated / JSON |
+| UI loads, every request blocked | `CORS_ORIGINS` had a **trailing slash**; a browser `Origin` never has a path | Now stripped automatically |
+
+The last three are fixed in code, so a fresh deploy of this repo will not hit them.
+
+### Turning on your own GPU later
+
+1. `deploy\start-ai.bat` — starts Caddy (auth proxy) + the Cloudflare tunnel
+2. Verify the lock before exposing it: `curl -H "Authorization: Bearer <token>" https://<host>/v1/models` must return models, and the same call **without** the header must return `401`
+3. On Render set: `DATACHAT_OLLAMA_ENABLED=true`, `DATACHAT_OLLAMA_BASE_URL=https://<host>/v1` (note the `/v1`), `DATACHAT_OLLAMA_API_KEY=<same token as Caddy>`, `DATACHAT_OLLAMA_MODEL=qwen2.5:7b-instruct`
+4. Ollama then leads for every task — `TaskAwarePolicy` puts a present Ollama ahead of cloud providers
+5. After the demo set `DATACHAT_OLLAMA_ENABLED=false`, so requests don't pay a timeout before falling back

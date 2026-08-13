@@ -16,12 +16,14 @@ An agentic natural-language analytics platform over public datasets — built as
 ![Cost](https://img.shields.io/badge/cost-%240%2Fmonth-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-[**Live API**](https://datachat-api-wmpd.onrender.com/health) · [**API docs**](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design deep-dive](./Design.md)
+[**▶ Live demo**](https://data-chat-seven.vercel.app/) · [API](https://datachat-api-wmpd.onrender.com/health) · [API docs](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design](./Design.md)
 
-<!-- 👉 Add the Vercel UI link and a 60–90s walkthrough video above once the frontend is deployed (GOLIVE.md §6). -->
+> **First load after idle takes ~50s.** The backend runs on a free tier that sleeps
+> after 15 minutes and the database scales to zero. A keep-warm ping every 12
+> minutes mitigates it. This is a documented trade-off of a genuinely $0 deploy,
+> not a bug — see [Live deployment](#live-deployment).
 
-Try it without any setup — streams Server-Sent Events, first call after idle takes
-~50s while the free instance wakes:
+Or hit the API directly, no setup:
 
 ```bash
 curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
@@ -33,8 +35,17 @@ curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
 
 ---
 
-<!-- 👉 HERO: replace this with an animated GIF of a question → streamed SQL → chart. Put the file at docs/hero.gif -->
-> **[ Hero GIF placeholder ]** — `docs/hero.gif`: record yourself asking *"Top 10 countries by CO₂ per capita in 2022"* and the app streaming the plan, SQL, results, and chart.
+<!-- ┌──────────────────────────────────────────────────────────────────────────┐
+     │  HERO GIF — drop the file at docs/hero.gif and delete this comment block │
+     │  and the placeholder line below. Recording steps: docs/README.md         │
+     └──────────────────────────────────────────────────────────────────────────┘ -->
+
+<!-- Once docs/hero.gif exists, uncomment the next line: -->
+<!-- ![DataChat in action](docs/hero.gif) -->
+
+> **[ Hero GIF goes here ]** — a 15–20s loop: question typed → plan streams → SQL
+> appears → table fills → chart renders. Recording instructions in
+> [docs/README.md](docs/README.md).
 
 ## The problem & why it matters
 
@@ -130,6 +141,59 @@ To use real models later, set `USE_MOCKS=false` and add keys — see **[GOLIVE.m
 - **Safety as architecture:** an AST guardrail chain plus a read-only least-privilege role means no unsafe SQL can execute even if a layer is bypassed.
 - **Evaluation you can trust:** execution-accuracy scoring (result-set equality) gates regressions in CI.
 - **Durable agent state:** LangGraph checkpoints let a human-in-the-loop pause survive reloads and cold starts.
+
+## What data it answers from
+
+Three datasets ship, selectable at ingestion (`--dataset seed|wdi|owid`). The live
+demo runs `seed`.
+
+| Dataset | Source | Contents |
+|---|---|---|
+| `seed` | bundled fixture | The union of the two below — keyless local dev and the deployed demo |
+| `wdi` | [World Bank API](https://api.worldbank.org/v2) (live fetch) | 15 countries × GDP per capita, population, life expectancy × 2022 |
+| `owid` | [Our World in Data](https://github.com/owid/co2-data) | Same 15 countries × CO₂ total / per capita / global share × 2021–2022 |
+
+Four tables: `countries`, `wdi_indicators`, `wdi_values`, `owid_co2`.
+
+**The slice is small on purpose.** Neon's free tier is 0.5 GB, and the point of
+the project is retrieval quality and evaluation, not corpus size. It is real data
+from real sources — not synthetic — and everything the agent claims is traceable
+to a row you can download as CSV.
+
+**Scaling it is a config change, not a rewrite.** The World Bank API exposes on the
+order of a thousand indicators for ~200 countries; widening means adding entries
+to `_INDICATORS` and a matching semantic definition. Any new source is a
+`DatasetConnector` — `name` plus `async fetch() -> RawDataset` — alongside
+`world_bank.py` and `owid.py`, with no change to the agent, the guardrail or the API.
+
+## Where the RAG is
+
+Retrieval does **not** fetch answers. It fetches the *schema* the model needs to
+write correct SQL, which is what keeps the LLM from inventing column names.
+
+```
+question ──embed──> pgvector cosine top-k ──> only the relevant slice of:
+                                                • table + column descriptions
+                                                • units, synonyms
+                                                • few-shot Q→SQL examples
+                                              ──> SQL-generation prompt
+```
+
+- **Indexed:** each semantic table, each column, and each few-shot example, embedded
+  at ingestion time (`ingestion/steps.py`)
+- **Retrieved:** cosine top-k over `<=>` with an HNSW index (`catalog/pgvector.py`)
+- **Used by:** the `retrieve` node, before `plan` and `generate_sql`
+
+**Why this reduces LLM usage rather than adding to it:** the model never receives
+the whole schema, only the top-k slice, so prompts stay small and the surface for
+hallucinated columns shrinks. On top of that, an exact-match answer cache replays
+repeat questions in ~80 ms with **zero** model calls, and embeddings are computed
+once at ingestion — a query costs exactly one embedding call.
+
+The curated part matters: indicator *names, units and descriptions* are written by
+hand in `ingestion/definitions.py` rather than fetched, so an upstream label change
+cannot alter the grounding surface. That is a supply-chain path straight into the
+prompt, closed deliberately.
 
 ## Evaluation
 

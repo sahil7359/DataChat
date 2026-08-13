@@ -88,6 +88,9 @@
 | Container verified end to end | Done | Five services from a wiped volume, auto-migrate + seed, `/ready` 200, SSE streaming with `USE_MOCKS=false` against qwen2.5:7b-instruct. | 2026-08-11 |
 | Web fallback returns a table | Done | `web_table@v1` extraction with per-row citations, distinct `WebTable` type + `web_table` SSE event + web report layout + `source_url` in CSV. Parser enforces attribution. Off by default. | 2026-08-11 |
 | FLOW.md | Done | Single-file architecture walkthrough with trust boundaries; linked as the entry point from the README. | 2026-08-11 |
+| **Deployed live** | **Done** | Backend on Render (Groq provider, Neon, Upstash), frontend on Vercel, CORS wired, keep-warm every 12 min. https://data-chat-seven.vercel.app | 2026-08-13 |
+| Deploy defects fixed in code | Done | Render shells dockerCommand (moved to backend/start.sh); pydantic-settings JSON-decodes list envs (plain/CSV/JSON now accepted); CORS origin trailing slash now stripped. | 2026-08-13 |
+| Docs: data + RAG sections | Done | README explains which datasets ship, why the slice is small, and exactly where retrieval sits in the flow. docs/README.md covers recording the hero GIF. | 2026-08-13 |
 
 ## Known open items
 
