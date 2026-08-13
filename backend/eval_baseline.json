@@ -10,7 +10,18 @@
   "_tolerance_rationale": "One answerable case is worth 1/21 = 0.0476. A tolerance below that fires on a single case flipping, which is noise, not regression; 0.05 absorbs exactly one case and blocks two (0.0952). Sampling variance is not the driver - temperature is 0.0 - so the tolerance is sized by set granularity. If the set grows to 50 answerable cases, one case becomes 0.02 and this should tighten.",
 
   "baselines": {
+    "groq/llama-3.3-70b-versatile": {
+      "_note": "The deployed provider. Measured through the same decorator stack production uses - the free tier rate-limits a back-to-back 26-case run, and RetryingProvider honours Retry-After.",
+      "measured_at": "2026-08-14",
+      "temperature": 0.0,
+      "dataset": "seed",
+      "execution_accuracy": 0.8095,
+      "refusal_accuracy": 0.8,
+      "sql_valid_rate": 0.9524,
+      "faithfulness": 0.881
+    },
     "ollama/qwen2.5:7b-instruct": {
+      "_note": "Self-hosted 7B. Not the deployed provider; kept so the Ollama path stays gated.",
       "measured_at": "2026-08-11",
       "temperature": 0.0,
       "dataset": "seed",

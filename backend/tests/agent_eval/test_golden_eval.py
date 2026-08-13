@@ -178,33 +178,57 @@ async def test_pipeline_gate_scores_perfectly_with_a_scripted_model(
         await engine.dispose()
 
 
-def _active_provider(settings: object) -> tuple[str, Any]:
+def _active_provider(settings: object) -> tuple[str, Any, Any]:
     """Which real provider the quality gate should measure, and its adapter.
 
     Mirrors ``Container.llm``: a present Ollama leads, otherwise the first cloud
     key that is set. Returns a ``vendor/model`` id used to look up the matching
     baseline, because execution accuracy is as much a property of the model as of
     the pipeline — one blended number across providers would mean nothing.
+
+    why the adapter is wrapped in ``build_resilient`` rather than used raw: a
+    26-case run is ~130 back-to-back calls, which a free tier answers with 429.
+    A bare adapter turns that into a failed gate that looks like a quality
+    regression. Wrapping also makes the measurement representative — it is the
+    same stack the deployed app runs, so the number describes the system rather
+    than an adapter nobody uses in isolation.
     """
     import httpx
 
+    from app.infrastructure.llm.circuit_breaker import CircuitBreaker
+    from app.infrastructure.llm.decorators import build_resilient
     from app.infrastructure.llm.groq import GroqAdapter
     from app.infrastructure.llm.ollama import OllamaAdapter
+    from tests.fakes.cache import InMemoryCache
 
     client = httpx.AsyncClient()
+
+    def _resilient(adapter: Any) -> Any:
+        cache = InMemoryCache()
+        return build_resilient(
+            adapter,
+            tracer=NoopTracer(),
+            # A high threshold on purpose: rate limiting is expected here and must
+            # not trip the breaker into failing the rest of the set.
+            breaker=CircuitBreaker(cache, fail_threshold=99, cooldown_s=1),
+            cache=cache,
+            max_attempts=6,
+        )
+
     if settings.ollama_enabled:  # type: ignore[attr-defined]
         model = settings.ollama_model  # type: ignore[attr-defined]
-        return f"ollama/{model}", OllamaAdapter(
+        ollama = OllamaAdapter(
             client,
             settings.ollama_api_key.get_secret_value(),  # type: ignore[attr-defined]
             base_url=settings.ollama_base_url,  # type: ignore[attr-defined]
             model=model,
             timeout_s=180.0,
         )
+        return f"ollama/{model}", _resilient(ollama), client
     groq_key = settings.groq_api_key.get_secret_value()  # type: ignore[attr-defined]
     if groq_key:
-        adapter = GroqAdapter(client, groq_key, timeout_s=180.0)
-        return f"groq/{adapter._model}", adapter
+        groq = GroqAdapter(client, groq_key, timeout_s=180.0)
+        return f"groq/{groq._model}", _resilient(groq), client
     raise pytest.skip("no real provider configured: enable Ollama or set a Groq key")
 
 
@@ -218,7 +242,7 @@ async def test_real_model_does_not_regress_against_the_committed_baseline(
 ) -> None:
     document = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     settings = get_settings()
-    provider_id, llm = _active_provider(settings)
+    provider_id, llm, client = _active_provider(settings)
 
     baselines = document["baselines"]
     if provider_id not in baselines:
@@ -251,5 +275,5 @@ async def test_real_model_does_not_regress_against_the_committed_baseline(
         )
         assert report.refusal_accuracy >= float(baseline["refusal_accuracy"]) - tolerance
     finally:
-        await llm._client.aclose()
+        await client.aclose()
         await engine.dispose()

@@ -204,23 +204,28 @@ country, indicators we don't carry, an ambiguous question, a year beyond the dat
 No golden question duplicates a few-shot example; a test enforces that, because a
 duplicated question measures copying, not reasoning.
 
-Measured on **`qwen2.5:7b-instruct`** (self-hosted Ollama, `temperature=0`) against
-the `seed` dataset. Reproduce with `make eval-real`.
+Measured at `temperature=0` against the `seed` dataset. Reproduce with
+`make eval-real`. Baselines are committed per provider in
+[`backend/eval_baseline.json`](backend/eval_baseline.json) — execution accuracy is
+as much a property of the model as of the pipeline, so one blended number across
+providers would mean nothing.
 
-| Metric | Score | n | What it means |
-|---|---:|---:|---|
-| Execution accuracy | **0.667** | 21 | Agent's result set equals the gold query's, exactly |
-| Refusal accuracy | **0.80** | 5 | Declined instead of inventing an answer it had no data for |
-| SQL valid rate | **0.952** | 21 | Generated SQL parses and passes the AST guardrail |
-| Explanation faithfulness | **0.857** | 21 | Prose is grounded in the returned rows (LLM judge) |
+| Metric | **Groq `llama-3.3-70b-versatile`** *(deployed)* | Ollama `qwen2.5:7b-instruct` *(self-hosted)* | n |
+|---|---:|---:|---:|
+| Execution accuracy | **0.810** | 0.667 | 21 |
+| Refusal accuracy | **0.80** | 0.80 | 5 |
+| SQL valid rate | **0.952** | 0.952 | 21 |
+| Explanation faithfulness | **0.881** | 0.857 | 21 |
 
-<sub>These are the honest numbers for a 7B model on a deliberately mixed set.
-Earlier the README showed 0.80 execution accuracy — that was a 5-case set, one of
-whose questions was a verbatim few-shot example. Both problems are fixed; the score
-went down because the measurement got harder, not because the agent got worse.
+<sub>The left column is what the live demo runs. The right is the same set against
+a self-hosted 7B, kept so the Ollama path stays gated too — the 14-point gap is
+the cost of running on your own GPU, measured rather than guessed.
+An earlier README showed 0.80 for a 5-case set, one of whose questions was a
+verbatim few-shot example; both problems are fixed and the set is now 26 cases
+with a test that fails the build if leakage returns.
 Known scoring artifact: result-set equality is strict, so an answer returning
 country *names* where the gold used ISO codes counts as a miss despite being
-substantively right.</sub>
+substantively right — that is 1 of the 4 Groq misses.</sub>
 
 ### How it is gated
 
