@@ -16,14 +16,45 @@ An agentic natural-language analytics platform over public datasets — built as
 ![Cost](https://img.shields.io/badge/cost-%240%2Fmonth-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-[**▶ Live demo**](https://data-chat-seven.vercel.app/) · [API](https://datachat-api-wmpd.onrender.com/health) · [API docs](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design](./Design.md)
+### [**▶ Open the live demo**](https://data-chat-seven.vercel.app/)
 
-> **First load after idle takes ~50s.** The backend runs on a free tier that sleeps
-> after 15 minutes and the database scales to zero. A keep-warm ping every 12
-> minutes mitigates it. This is a documented trade-off of a genuinely $0 deploy,
-> not a bug — see [Live deployment](#live-deployment).
+<!-- ┌───────────────────────────────────────────────────────────────────────┐
+     │  HERO GIF — put the file at docs/hero.gif, uncomment the line below,  │
+     │  and delete this block and the placeholder. Steps: docs/README.md     │
+     └───────────────────────────────────────────────────────────────────────┘ -->
+<!-- ![DataChat: question to verified SQL to chart](docs/hero.gif) -->
 
-Or hit the API directly, no setup:
+> **[ Hero GIF goes here ]** — 15–20s: question → plan → SQL → table → chart.
+> Instructions in [docs/README.md](docs/README.md).
+
+</div>
+
+**What it covers, and what it doesn't.** 15 countries · GDP per capita, population
+and life expectancy (World Bank, 2022) · CO₂ emissions (Our World in Data,
+2021–2022). It cannot answer about any other country, indicator or year, and it
+says so rather than guessing. **The narrowness is a cost decision, not an
+oversight** — the whole system runs at **$0/month** on free tiers, and the point of
+the project is retrieval quality and evaluation, not corpus size. Widening it is a
+config change, not a rewrite.
+
+| Measured on **Groq `llama-3.3-70b-versatile`**, `temperature=0` | Score | n |
+|---|---:|---:|
+| Execution accuracy — result set equals the gold query's, exactly | **0.810** | 21 |
+| Refusal accuracy — declined instead of inventing an answer | **1.00** | 5 |
+| SQL valid rate — parses and passes the AST guardrail | **0.952** | 21 |
+| Explanation faithfulness — prose grounded in the returned rows | **0.905** | 21 |
+
+Reproduce with `make eval-real`. Baselines are committed per provider in
+[`backend/eval_baseline.json`](backend/eval_baseline.json); see
+[Evaluation](#evaluation) for how the gate works and
+[Known limitations](#known-limitations--failure-modes) for what these numbers do
+*not* cover.
+
+> **First load takes ~50s** if the demo has been idle — the free backend sleeps
+> after 15 min and the database scales to zero. A keep-warm ping every 12 minutes
+> mitigates it.
+
+Or skip the UI entirely:
 
 ```bash
 curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
@@ -31,21 +62,9 @@ curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
   -d '{"question":"Which 5 countries had the highest CO2 per capita in 2022?"}'
 ```
 
-</div>
+[API](https://datachat-api-wmpd.onrender.com/health) · [API docs](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design](./Design.md) · [Changelog + reasoning](./LEARN.md)
 
 ---
-
-<!-- ┌──────────────────────────────────────────────────────────────────────────┐
-     │  HERO GIF — drop the file at docs/hero.gif and delete this comment block │
-     │  and the placeholder line below. Recording steps: docs/README.md         │
-     └──────────────────────────────────────────────────────────────────────────┘ -->
-
-<!-- Once docs/hero.gif exists, uncomment the next line: -->
-<!-- ![DataChat in action](docs/hero.gif) -->
-
-> **[ Hero GIF goes here ]** — a 15–20s loop: question typed → plan streams → SQL
-> appears → table fills → chart renders. Recording instructions in
-> [docs/README.md](docs/README.md).
 
 ## The problem & why it matters
 
@@ -287,6 +306,88 @@ distinct questions asked cold then repeated:
 Postgres and Redis on the same host. A cold model load or a free-tier cold start
 adds tens of seconds to the first number and does not affect the second — so treat
 this as the steady-state ratio (~15–20×), not a cold-boot claim.</sub>
+
+## Known limitations & failure modes
+
+Written from measured runs, not from imagination. Being precise about failure is
+more useful than another adjective.
+
+### The published accuracy understates the system, on purpose
+
+Of the 4 answerable cases Groq misses (17/21 = 0.810), **3 are the same scoring
+artifact**: the model joins to `countries` and returns the country *name* where the
+gold SQL selected the ISO code.
+
+```
+gold       SELECT country_iso3, co2_per_capita ...   ->  ["QAT", 37.6]
+predicted  SELECT c.name, o.co2_per_capita ...       ->  ["Qatar", 37.6]
+```
+
+Result-set equality is exact, so that scores as wrong despite being right — and
+arguably more readable. A lenient scorer would report roughly **0.95**. The strict
+number is published anyway, because loosening a metric to flatter yourself is how
+an eval stops being worth running. The remaining miss is real: *"How many countries
+are in each income group?"* produced **no SQL at all**, which is also the single
+point of `sql_valid_rate = 0.952`.
+
+### Where the agent mis-routes
+
+- **Ambiguity is handled by the model, not by a rule.** The scope gate settles
+  countries and years deterministically, but *"show me the best countries"* has no
+  named entity to check — it depends on the clarify prompt firing. That is the one
+  refusal case the 7B model got wrong.
+- **Indicators are not scope-checked.** The vocabulary is open ("literacy rate",
+  "unemployment"), so a keyword list would refuse phrasings that do work. Those
+  questions still generate SQL, match nothing, and are caught downstream — correct,
+  but it costs a model call the country/year path avoids.
+- **The scope gazetteer is not exhaustive.** ~124 country names. A miss is not a
+  wrong answer, only a missed early exit.
+
+### Where retrieval is weaker than it looks
+
+Retrieval is over **4 tables** — it is not a hard retrieval problem, and NDCG-style
+numbers would be meaningless at this size. The harder property is that the semantic
+layer is **curated by hand**: indicator names, units and descriptions are written in
+`ingestion/definitions.py` rather than fetched, so an upstream label change cannot
+alter the grounding surface. That is a deliberate supply-chain decision, but it
+means widening the corpus is manual work, not an automatic import.
+
+Dev and production also embed differently — a deterministic hash embedder locally,
+Gemini in production. Changing embedder without re-ingesting silently degrades
+retrieval, because the stored vectors and the query vector stop sharing a space.
+
+### What the eval does not cover
+
+The 26 cases measure single-turn NL→SQL over one seeded slice. **Not covered:**
+multi-turn conversation, the human-approval path, chart *correctness* (only that a
+spec is produced), latency, cost, the web-fallback path, or any dataset other than
+`seed`. The CI tier holds model quality constant and measures the pipeline; it says
+nothing about answer quality.
+
+### The 7B vs 70B gap is real and measured
+
+| | Groq 70B *(deployed)* | Ollama qwen2.5 7B *(self-hosted)* |
+|---|---:|---:|
+| Execution accuracy | 0.810 | **0.667** |
+| Faithfulness | 0.905 | 0.857 |
+
+A 14-point drop is the price of running on your own GPU on this task. The Ollama
+refusal figure predates the scope gate and has not been re-measured, so it is not
+claimed as improved.
+
+### Operational
+
+- **~50s cold start** after idle (free tier sleeps, Neon scales to zero).
+- **Answer cache is exact-match**, deliberately: "top 5" and "top 10" are nearly
+  identical as strings but need different answers, so fuzzy matching would return a
+  confidently wrong result.
+- **Web fallback is off in production.** It works, but it is capped by search
+  *snippets* — typically one or two sparse columns — and enabling it would
+  contradict the published refusal number until the golden set separates "must
+  refuse" from "must escalate".
+- **Three `cryptography` advisories are accepted, not fixed**: mlflow pins
+  `cryptography<47`. They are ignored by ID in CI with the constraint documented,
+  so they resurface when mlflow relaxes it.
 
 ## Testing, observability & security
 
