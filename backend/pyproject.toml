@@ -2,7 +2,10 @@
 name = "datachat-backend"
 version = "0.1.0"
 description = "Agentic natural-language analytics over open datasets — safe, grounded, verified SQL."
-readme = "../README.md"
+# No `readme` key on purpose: hatchling rejects a path outside the project dir
+# ("Readme path must be within the project directory: ../README.md"), which fails
+# `uv sync` before a single test runs. This package is never published — it is
+# built so `app` and `ingestion` are importable — so the metadata buys nothing.
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "Sahil Chakraborty" }]
