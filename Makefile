@@ -22,6 +22,10 @@ install: ## Install backend deps (incl. dev group)
 
 lint: ## ruff + import-linter (backend); eslint (frontend)
 	cd $(BACKEND) && uv run python -m ruff check . && uv run python -m ruff format --check .
+	# `|| true` because grimp's native ext is WDAC-blocked on the Windows dev
+	# box; CI (Linux) runs `lint-imports` for real and must not be softened.
+	# Note `python -m importlinter.cli` silently no-ops on 2.13 — if you want a
+	# local check, run `lint-imports` inside the container.
 	cd $(BACKEND) && uv run python -m importlinter.cli lint || true
 
 fmt: ## Auto-format

@@ -141,6 +141,11 @@ exclude_dirs = ["tests", ".venv", "migrations"]
 
 [tool.importlinter]
 root_package = "app"
+# Required because the "Domain is framework-free" contract forbids *external*
+# packages (fastapi, sqlalchemy, langgraph, ...). Without it import-linter refuses
+# to run at all: "The top level configuration must have
+# include_external_packages=True when there are external forbidden modules."
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Domain never imports outward"
