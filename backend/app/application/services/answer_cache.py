@@ -50,7 +50,9 @@ def serialize_answer(values: Mapping[str, Any]) -> bytes | None:
     execution = values.get("execution")
     # Only cache real, non-empty data answers: an empty result means the web
     # fallback (if any) produced the answer, which is time-sensitive and unkeyed.
-    if execution is None or execution.row_count == 0 or values.get("error_code"):
+    # is_empty(), not row_count: an aggregate over zero rows returns a single
+    # all-NULL row, and pinning that would replay a non-answer as a cache hit.
+    if execution is None or execution.is_empty() or values.get("error_code"):
         return None
     plan = values.get("plan")
     chart = values.get("chart_spec")

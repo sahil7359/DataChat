@@ -16,6 +16,7 @@ from app.domain.ports.sql import QueryExecutor
 from app.domain.ports.web_search import WebSearchProvider
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
+from ingestion.definitions import seed_scope
 from tests.fakes.catalog import FakeSchemaCatalog
 from tests.fakes.sql import FakeQueryExecutor
 from tests.fakes.tracing import NoopTracer
@@ -38,6 +39,7 @@ def build_service(
     max_repair: int = 2,
 ) -> QueryService:
     deps = NodeDependencies(
+        scope=seed_scope(),
         tracer=NoopTracer(),
         catalog=FakeSchemaCatalog(),
         llm=llm or MockLLMProvider(),

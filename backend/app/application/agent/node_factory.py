@@ -19,6 +19,7 @@ from app.application.agent.nodes.plan import PlanNode
 from app.application.agent.nodes.repair import RepairNode
 from app.application.agent.nodes.respond import RespondNode
 from app.application.agent.nodes.retrieve import RetrieveContextNode
+from app.application.agent.nodes.scope_check import ScopeCheckNode
 from app.application.agent.nodes.understand import UnderstandNode
 from app.application.agent.nodes.verify import VerifyNode
 from app.application.agent.nodes.visualize import VisualizeNode
@@ -29,6 +30,7 @@ from app.domain.ports.repositories import AgentActionRepository
 from app.domain.ports.sql import QueryExecutor, SqlValidator
 from app.domain.ports.tracing import Tracer
 from app.domain.ports.web_search import WebSearchProvider
+from app.domain.scope import DataScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +41,10 @@ class NodeDependencies:
     validator: SqlValidator
     executor: QueryExecutor
     audit: AgentActionRepository | None = None
+    # None disables the deterministic scope gate (used by unit tests that
+    # drive the graph with fakes and no loaded dataset).
+    scope: DataScope | None = None
+    scope_example: str = "Which 5 countries had the highest CO2 per capita in 2022?"
     web_search: WebSearchProvider | None = None
     retrieval_k: int = 8
 
@@ -54,6 +60,10 @@ class NodeFactory:
                 return UnderstandNode(d.tracer, d.llm)
             case "retrieve":
                 return RetrieveContextNode(d.tracer, d.catalog, k=d.retrieval_k)
+            case "scope_check":
+                if d.scope is None:
+                    raise ValueError("scope_check node requires a DataScope")
+                return ScopeCheckNode(d.tracer, d.scope, example=d.scope_example)
             case "plan":
                 return PlanNode(d.tracer)
             case "generate_sql":

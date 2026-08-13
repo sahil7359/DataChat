@@ -17,12 +17,14 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from app.application.agent.node_factory import NodeFactory
+from app.application.agent.nodes.scope_check import OUT_OF_SCOPE_CODE
 from app.application.agent.state import AgentState
 from app.domain.value_objects import HITLDecision
 
 _NODES = (
     "understand",
     "retrieve",
+    "scope_check",
     "plan",
     "generate_sql",
     "guardrail",
@@ -56,7 +58,15 @@ class GraphBuilder:
 
         graph.add_edge(START, "understand")
         graph.add_edge("understand", "retrieve")
-        graph.add_edge("retrieve", "plan")
+        graph.add_edge("retrieve", "scope_check")
+        # A question naming a country or year we did not load ends here, before
+        # any model call: deterministic, free, and it cannot answer confidently
+        # from nothing the way the generate->execute path could.
+        graph.add_conditional_edges(
+            "scope_check",
+            self._route_after_scope,
+            {"plan": "plan", "respond": "respond"},
+        )
         graph.add_edge("plan", "generate_sql")
         graph.add_edge("generate_sql", "guardrail")
 
@@ -91,6 +101,14 @@ class GraphBuilder:
             graph.add_edge("web_fallback", "respond")
         graph.add_edge("respond", END)
         return graph.compile(checkpointer=checkpointer)
+
+    def _route_after_scope(self, state: AgentState) -> str:
+        """Out-of-scope questions skip straight to the terminal node.
+
+        Nothing downstream can improve on a definite "we did not load that" — SQL
+        generation would only produce a query guaranteed to match nothing.
+        """
+        return "respond" if state.get("error_code") == OUT_OF_SCOPE_CODE else "plan"
 
     def _route_after_guardrail(self, state: AgentState) -> str:
         validation = state.get("validation")

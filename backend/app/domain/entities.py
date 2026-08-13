@@ -138,7 +138,17 @@ class ExecutionResult:
     truncated: bool = False
 
     def is_empty(self) -> bool:
-        return self.row_count == 0
+        """No usable data — no rows, or a single row that is entirely NULL.
+
+        why the second case: an aggregate over zero matching rows still returns
+        one row. ``SELECT SUM(co2)/SUM(pop) ... WHERE year = 2030`` yields a
+        single NULL, so ``row_count == 1`` and every caller concluded it had an
+        answer. That is how a question about a year we do not carry produced a
+        confident non-answer instead of a refusal.
+        """
+        if self.row_count == 0:
+            return True
+        return len(self.rows) == 1 and all(value is None for value in self.rows[0])
 
 
 @dataclass(frozen=True, slots=True)

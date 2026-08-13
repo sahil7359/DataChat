@@ -32,6 +32,7 @@ from app.application.agent.events import (
     WebSourcesEvent,
     WebTableEvent,
 )
+from app.application.agent.nodes.scope_check import OUT_OF_SCOPE_CODE
 from app.application.agent.state import AgentState
 from app.application.services.answer_cache import (
     answer_cache_key,
@@ -303,7 +304,10 @@ def _interrupt_payload(update: object) -> Mapping[str, Any]:
 
 def _final_events(state: Mapping[str, Any], run_id: str) -> list[AgentEvent]:
     error_code = state.get("error_code")
-    if error_code:
+    # An out-of-scope refusal already streamed its own explanation, which names
+    # the boundary and suggests a question that works. Emitting an error on top
+    # would show the user a failure for a question the system handled correctly.
+    if error_code and str(error_code) != OUT_OF_SCOPE_CODE:
         message = _SAFE_MESSAGES.get(str(error_code), _DEFAULT_ERROR)
         return [ErrorEvent(code=str(error_code), message=message), DoneEvent(run_id=run_id)]
     return [DoneEvent(run_id=run_id)]

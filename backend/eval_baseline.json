@@ -12,16 +12,18 @@
   "baselines": {
     "groq/llama-3.3-70b-versatile": {
       "_note": "The deployed provider. Measured through the same decorator stack production uses - the free tier rate-limits a back-to-back 26-case run, and RetryingProvider honours Retry-After.",
+      "_refusal_note": "0.80 -> 1.00 after the deterministic scope gate (2026-08-14). Execution accuracy was unchanged at 0.8095, which is the check that matters: the gate caught the miss without refusing anything answerable.",
       "measured_at": "2026-08-14",
       "temperature": 0.0,
       "dataset": "seed",
       "execution_accuracy": 0.8095,
-      "refusal_accuracy": 0.8,
+      "refusal_accuracy": 1.0,
       "sql_valid_rate": 0.9524,
-      "faithfulness": 0.881
+      "faithfulness": 0.9048
     },
     "ollama/qwen2.5:7b-instruct": {
       "_note": "Self-hosted 7B. Not the deployed provider; kept so the Ollama path stays gated.",
+      "_stale": "Measured BEFORE the scope gate. Its one refusal miss was 'Show me the best countries' - an ambiguity case the gate does not catch - so this number is NOT assumed to have improved. Re-measure before quoting it.",
       "measured_at": "2026-08-11",
       "temperature": 0.0,
       "dataset": "seed",

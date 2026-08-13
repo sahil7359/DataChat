@@ -26,6 +26,7 @@ from app.domain.results import Err, ExecutionError, Ok, Result
 from app.domain.value_objects import TaskKind
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
+from ingestion.definitions import seed_scope
 from tests.fakes.catalog import FakeSchemaCatalog
 from tests.fakes.sql import FakeQueryExecutor
 from tests.fakes.tracing import NoopTracer
@@ -59,6 +60,7 @@ def _deps(
     *, llm: LLMProvider | None = None, executor: QueryExecutor | None = None
 ) -> NodeDependencies:
     return NodeDependencies(
+        scope=seed_scope(),
         tracer=NoopTracer(),
         catalog=FakeSchemaCatalog(),
         llm=llm or MockLLMProvider(),

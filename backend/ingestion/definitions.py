@@ -8,6 +8,7 @@ predicted SQL to run against the *same* data, so exactness isn't required.
 
 from __future__ import annotations
 
+from app.domain.scope import DataScope
 from ingestion.checksum import compute_checksum
 from ingestion.ports import (
     DatasetDefinition,
@@ -301,3 +302,33 @@ DEFINITIONS: dict[str, DatasetDefinition] = {
     "owid": OWID_DEFINITION,
     "seed": SEED_DEFINITION,
 }
+
+
+# --- scope, for the deterministic out-of-scope gate -------------------------
+
+
+def seed_scope() -> DataScope:
+    """What the seed slice actually contains, as a checkable value object.
+
+    Derived from the same constants the loader uses, so the gate cannot claim a
+    coverage the ingestion does not have. Years are the union of what the two
+    sources carry: WDI is 2022 only, OWID is 2021-2022.
+    """
+    from ingestion.iso3166 import ALIASES, ISO_3166_NAMES
+
+    loaded = {name.lower() for name, _, _ in _COUNTRIES.values()}
+    # Colloquial forms of a loaded country count as loaded, so "USA" or
+    # "the UK" is not mistaken for a country we do not carry.
+    loaded |= {alias for alias, canonical in ALIASES.items() if canonical in loaded}
+
+    return DataScope(
+        country_names=frozenset(loaded),
+        display_names=tuple(sorted(name for name, _, _ in _COUNTRIES.values())),
+        country_codes=frozenset(code.lower() for code in _COUNTRIES),
+        years=frozenset({2021, 2022}),
+        indicator_labels=(
+            "GDP per capita, population and life expectancy (World Bank, 2022)",
+            "CO2 emissions total, per capita and share of global (Our World in Data, 2021-2022)",
+        ),
+        known_countries=ISO_3166_NAMES,
+    )

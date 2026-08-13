@@ -59,6 +59,7 @@ from app.infrastructure.db.repositories import SqlEvalRepository
 from app.infrastructure.llm.embeddings import LocalHashEmbeddingProvider
 from app.infrastructure.sql.executor import ReadOnlyQueryExecutor
 from app.infrastructure.sql.validator import SqlValidatorChain
+from ingestion.definitions import seed_scope
 from ingestion.pipeline import build_pipeline
 from tests.fakes.tracing import NoopTracer
 
@@ -142,6 +143,7 @@ def _build_harness(
 ) -> EvalService:
     executor = ReadOnlyQueryExecutor(engine, row_cap=1000, timeout_s=5)
     deps = NodeDependencies(
+        scope=seed_scope(),
         tracer=NoopTracer(),
         catalog=PgVectorSchemaCatalog(sessionmaker, embedder),  # type: ignore[arg-type]
         llm=llm,  # type: ignore[arg-type]

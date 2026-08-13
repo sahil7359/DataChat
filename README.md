@@ -229,9 +229,25 @@ providers would mean nothing.
 | Metric | **Groq `llama-3.3-70b-versatile`** *(deployed)* | Ollama `qwen2.5:7b-instruct` *(self-hosted)* | n |
 |---|---:|---:|---:|
 | Execution accuracy | **0.810** | 0.667 | 21 |
-| Refusal accuracy | **0.80** | 0.80 | 5 |
+| Refusal accuracy | **1.00** | 0.80 † | 5 |
 | SQL valid rate | **0.952** | 0.952 | 21 |
-| Explanation faithfulness | **0.881** | 0.857 | 21 |
+| Explanation faithfulness | **0.905** | 0.857 | 21 |
+
+**Refusal accuracy was 0.80 and is now 1.00.** One in five out-of-scope questions
+was being answered rather than declined, which on a public demo is a
+hallucination risk — so it is written up rather than quietly improved. The cause
+was not a careless model: *"what will global CO₂ be in 2030?"* produced
+`SUM(co2)/SUM(pop) WHERE year = 2030`, and an aggregate over zero rows returns
+**one row containing NULL**, so the pipeline saw `row_count = 1` and concluded it
+had an answer. Fixed by deciding scope deterministically *before* SQL generation
+(a named country or year outside the loaded slice is a fact, not a judgement) and
+by treating an all-NULL row as no data. Execution accuracy was unchanged at
+0.8095, which is the check that matters — the gate added no false refusals.
+
+<sub>† The Ollama column was measured **before** the scope gate. Its one refusal
+miss was *"Show me the best countries"*, an ambiguity case the gate does not
+catch, so that number is not assumed to have improved and has not been
+re-measured.</sub>
 
 <sub>The left column is what the live demo runs. The right is the same set against
 a self-hosted 7B, kept so the Ollama path stays gated too — the 14-point gap is

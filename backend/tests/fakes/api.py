@@ -17,6 +17,7 @@ from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
 from app.interface.api.rate_limit import RateLimiter
 from app.main import create_app
+from ingestion.definitions import seed_scope
 from tests.fakes.cache import InMemoryCache
 from tests.fakes.catalog import FakeSchemaCatalog
 from tests.fakes.sql import FakeQueryExecutor
@@ -32,6 +33,7 @@ _ROWS = ExecutionResult(
 
 def default_query_service() -> QueryService:
     deps = NodeDependencies(
+        scope=seed_scope(),
         tracer=NoopTracer(),
         catalog=FakeSchemaCatalog(),
         llm=MockLLMProvider(),

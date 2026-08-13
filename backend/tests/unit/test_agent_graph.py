@@ -22,6 +22,7 @@ from app.domain.results import LLMOutputError
 from app.domain.value_objects import TaskKind
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
+from ingestion.definitions import seed_scope
 from tests.fakes.catalog import FakeSchemaCatalog
 from tests.fakes.llm import FakeLLMProvider
 from tests.fakes.sql import FakeQueryExecutor
@@ -42,6 +43,7 @@ def _deps(
     executor: FakeQueryExecutor | None = None,
 ) -> NodeDependencies:
     return NodeDependencies(
+        scope=seed_scope(),
         tracer=tracer,
         catalog=FakeSchemaCatalog(),
         llm=llm or MockLLMProvider(),

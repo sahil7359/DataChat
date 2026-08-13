@@ -52,6 +52,7 @@ from app.infrastructure.sql.cache import CachingQueryExecutor
 from app.infrastructure.sql.executor import ReadOnlyQueryExecutor
 from app.infrastructure.sql.validator import SqlValidatorChain
 from app.infrastructure.web.search import DdgsWebSearchProvider, MockWebSearchProvider
+from ingestion.definitions import seed_scope
 
 _log = get_logger("container")
 
@@ -169,6 +170,9 @@ class Container:
             executor=self.executor(),
             audit=SqlAgentActionRepository(self._sessionmaker),
             web_search=self.web_search(),
+            # Derived from the curated definitions, so the gate cannot drift
+            # from what was actually ingested.
+            scope=seed_scope(),
             retrieval_k=self._settings.retrieval_k,
         )
 

@@ -15,6 +15,7 @@ from app.domain.results import LLMOutputError
 from app.domain.value_objects import TaskKind
 from app.infrastructure.llm.mock import MockLLMProvider
 from app.infrastructure.sql.validator import SqlValidatorChain
+from ingestion.definitions import seed_scope
 from tests.fakes.graph import ROWS, build_service
 from tests.fakes.llm import FakeLLMProvider
 from tests.fakes.sql import FakeQueryExecutor
@@ -66,6 +67,7 @@ async def test_llm05_empty_model_output_is_rejected() -> None:
 def test_llm06_tool_set_is_fixed_no_dynamic_loading() -> None:
     factory = NodeFactory(
         NodeDependencies(
+            scope=seed_scope(),
             tracer=NoopTracer(),
             catalog=type("C", (), {"retrieve": None})(),  # unused; build() fails before use
             llm=MockLLMProvider(),
