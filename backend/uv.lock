@@ -467,6 +467,7 @@ agent = [
     { name = "langgraph-checkpoint" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
 ]
 mlops = [
     { name = "mlflow" },
@@ -503,6 +504,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.10,<4" },
     { name = "pgvector", specifier = ">=0.3.6,<0.4" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'agent'", specifier = ">=3.2" },
+    { name = "psycopg-pool", marker = "extra == 'agent'", specifier = ">=3.2" },
     { name = "pyarrow", marker = "extra == 'mlops'", specifier = ">=23.0.1" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },

@@ -39,6 +39,9 @@ agent = [
     # The Postgres checkpointer talks psycopg3, which needs a libpq wrapper; the
     # binary wheel bundles libpq so no system package is required in the image.
     "psycopg[binary]>=3.2",
+    # Imported directly in main._build_checkpointer. It arrives transitively via
+    # the checkpointer today, but a direct import needs a direct declaration.
+    "psycopg-pool>=3.2",
     # Keyless web search for the out-of-scope fallback (metasearch over DuckDuckGo etc).
     "ddgs>=9.0",
 ]

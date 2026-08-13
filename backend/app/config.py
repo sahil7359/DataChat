@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     embedding_dim: int = 768
 
     # --- Observability ---------------------------------------------------
+    # Connections for the LangGraph checkpointer pool. Small on purpose: the free
+    # Postgres tier has a low ceiling and the SQL executor holds its own pool.
+    checkpointer_pool_size: int = 5
+
     mlflow_tracking_uri: str = "http://localhost:5000"
     # Cap on how long startup may spend talking to the tracking server. Telemetry
     # must never gate readiness — an unreachable host used to add ~90s to boot,

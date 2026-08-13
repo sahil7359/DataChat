@@ -124,10 +124,39 @@ async def _setup(app: FastAPI, settings: Settings) -> None:
 async def _build_checkpointer(
     stack: AsyncExitStack, settings: Settings
 ) -> BaseCheckpointSaver[Any]:
+    """Durable checkpointer over a *pool*, not a single connection.
+
+    why: ``AsyncPostgresSaver.from_conn_string`` opens one connection, and psycopg
+    refuses overlapping commands on one connection —
+
+        OperationalError: sending prepared query failed:
+        another command is already in progress
+
+    The graph checkpoints after every node, so two turns in flight at once (or one
+    turn whose writes interleave) collide and the whole stream fails. It survived
+    single-user testing and would have broken the first time two people opened the
+    demo together. A pool gives each concurrent operation its own connection.
+
+    ``max_size`` is small on purpose: the free Postgres tier has a low connection
+    ceiling, and the executor holds its own separate pool.
+    """
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
 
     conn = settings.database_url.replace("+asyncpg", "")
-    saver = await stack.enter_async_context(AsyncPostgresSaver.from_conn_string(conn))
+    pool = await stack.enter_async_context(
+        AsyncConnectionPool(
+            conninfo=conn,
+            min_size=1,
+            max_size=settings.checkpointer_pool_size,
+            # The saver issues its own transactions; autocommit avoids wrapping
+            # every checkpoint write in an extra outer transaction.
+            kwargs={"autocommit": True, "prepare_threshold": 0},
+            open=False,
+        )
+    )
+    await pool.open(wait=True)
+    saver = AsyncPostgresSaver(pool)
     await saver.setup()
     checkpointer: BaseCheckpointSaver[Any] = saver
     return checkpointer
