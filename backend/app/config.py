@@ -8,10 +8,12 @@ topology with **no real keys** (FR-25). Real values are supplied at go-live via
 
 from __future__ import annotations
 
+import json
+from contextlib import suppress
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.domain.value_objects import Provider
@@ -24,6 +26,14 @@ class Settings(BaseSettings):
         env_prefix="DATACHAT_",
         extra="ignore",
         frozen=True,
+        # why: without this, pydantic-settings JSON-decodes any collection-typed
+        # field at the *source* level, before validators run. So the obvious
+        # DATACHAT_CORS_ORIGINS=https://app.vercel.app died with
+        # `error parsing value for field "cors_origins"` — a message naming the
+        # field but not the cause, mid-deploy, in a hosting dashboard. Decoding
+        # off hands the raw string to _accept_comma_separated below, which takes
+        # both comma-separated and JSON.
+        enable_decoding=False,
     )
 
     # --- App -------------------------------------------------------------
@@ -106,6 +116,30 @@ class Settings(BaseSettings):
 
     # --- Edge ------------------------------------------------------------
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
+
+    @field_validator("cors_origins", "provider_order", mode="before")
+    @classmethod
+    def _accept_comma_separated(cls, value: object) -> object:
+        """Let list-valued settings be written as ``a,b`` in the environment.
+
+        why: pydantic-settings parses a collection-typed field from an env var as
+        JSON, so the obvious `DATACHAT_CORS_ORIGINS=https://app.vercel.app` fails
+        with `error parsing value for field "cors_origins"` — a message that
+        points at the field but not at the cause, during a deploy, in a hosting
+        dashboard. Nobody types a JSON array into a PaaS env box; comma-separated
+        is the near-universal convention for this setting.
+
+        JSON is still accepted, so an existing `["a","b"]` value keeps working.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            # Decoding is off at the source, so parse JSON here rather than
+            # handing pydantic a string it will reject as "not a valid tuple".
+            with suppress(json.JSONDecodeError):
+                return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
 
 
 @lru_cache

@@ -34,3 +34,43 @@ def test_env_overrides_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_settings_is_cached() -> None:
     assert get_settings() is get_settings()
+
+
+# --- env parsing of list-valued settings -----------------------------------
+# A deploy died on `DATACHAT_CORS_ORIGINS=https://app.vercel.app` because
+# pydantic-settings JSON-decodes collection fields at the source. Nobody types a
+# JSON array into a PaaS env box, so both forms must work.
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://a.vercel.app", ("https://a.vercel.app",)),
+        (
+            "https://a.vercel.app,https://b.vercel.app",
+            ("https://a.vercel.app", "https://b.vercel.app"),
+        ),
+        (
+            " https://a.vercel.app , https://b.vercel.app ",
+            ("https://a.vercel.app", "https://b.vercel.app"),
+        ),
+        ('["https://a.vercel.app"]', ("https://a.vercel.app",)),
+        ("https://a.vercel.app,", ("https://a.vercel.app",)),
+    ],
+)
+def test_cors_origins_accepts_plain_comma_separated_and_json(
+    monkeypatch: pytest.MonkeyPatch, raw: str, expected: tuple[str, ...]
+) -> None:
+    monkeypatch.setenv("DATACHAT_CORS_ORIGINS", raw)
+    assert Settings().cors_origins == expected
+
+
+def test_provider_order_accepts_comma_separated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATACHAT_PROVIDER_ORDER", "groq,gemini")
+    assert [p.value for p in Settings().provider_order] == ["groq", "gemini"]
+
+
+def test_list_settings_keep_their_defaults_when_unset() -> None:
+    settings = Settings()
+    assert settings.cors_origins == ("http://localhost:3000",)
+    assert [p.value for p in settings.provider_order] == ["gemini", "groq"]
