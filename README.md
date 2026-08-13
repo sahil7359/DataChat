@@ -64,6 +64,8 @@ curl -N -X POST https://datachat-api-wmpd.onrender.com/api/v1/chat \
 
 [API](https://datachat-api-wmpd.onrender.com/health) · [API docs](https://datachat-api-wmpd.onrender.com/docs) · [Architecture](#architecture) · [Flow](./FLOW.md) · [Design](./Design.md) · [Changelog + reasoning](./LEARN.md)
 
+[**Technical overview (PDF, 30pp)**](docs/DataChat-Technical-Overview.pdf) — architecture, flow, data model, security and change log in one document. Regenerate with `python docs/build_pdf.py`.
+
 ---
 
 ## The problem & why it matters
@@ -78,7 +80,7 @@ Public open datasets are rich but locked behind SQL and BI tools. Most "text-to-
 - **Safe by construction** — generated SQL passes an AST guardrail chain *and* runs on a read-only, least-privilege DB role with timeouts. No write path exists.
 - **Grounded (RAG-to-SQL)** — a semantic layer (schema docs, synonyms, few-shot examples) is retrieved via pgvector so the model doesn't invent columns.
 - **Human-in-the-loop** — approve or edit the SQL before it runs; durable state means the pause survives reloads and cold starts.
-- **Your GPU is the AI** — a self-hosted **Ollama** model (behind a token-guarded tunnel) is the primary provider, with **Gemini→Groq** as automatic circuit-breaker fallback. Private, free, and swappable.
+- **Swappable providers** — the deployed demo runs on **Groq**; a self-hosted **Ollama** model (behind a token-guarded tunnel) is the same port behind the same router and is one env flag away. A public URL has to answer when my PC is off, so the GPU is a demonstrable capability rather than a dependency. Circuit breaker between them.
 - **Instant on repeats** — a normalised whole-answer cache replays a prior answer for the same question, skipping the whole LLM chain, with zero false-positive risk (exact-match, never fuzzy). Measured **~1.0–1.6 s → ~80 ms** (see [Evaluation](#evaluation) for conditions).
 - **Downloadable reports & data** — every answer can be exported as a Markdown report (question, summary, SQL, table, and links to the source datasets) or a CSV of the result set.
 - **Honest out-of-scope answers** — when the governed data has no answer, an optional, injection-hardened web fallback returns a **structured table with a citation on every row**, plus a summary and a downloadable report. Web data is a separate type end to end — its own SSE event, its own report layout, `source_url` in the CSV — so a scrape can never be rendered as verified data, and it never re-enters the SQL path.
@@ -97,8 +99,8 @@ flowchart LR
   BFF --> AGENT["LangGraph agent<br/>plan→SQL→guardrail→verify→explain→(web fallback)"]
   AGENT --> SEM["Semantic layer<br/>(pgvector RAG)"]
   AGENT --> GUARD["SQL guardrail +<br/>read-only executor"]
-  AGENT --> LLM["Provider gateway<br/>Ollama (your GPU) → Gemini/Groq"]
-  LLM -.->|token-guarded tunnel| OLL["Ollama on your PC<br/>(Cloudflare + Caddy auth)"]
+  AGENT --> LLM["Provider gateway<br/>Groq (deployed) → Gemini"]
+  LLM -.->|optional, token-guarded tunnel| OLL["Ollama on your GPU<br/>(Cloudflare + Caddy auth)"]
   GUARD -->|read-only role| PG[("Postgres + pgvector<br/>Neon")]
   SEM --> PG
   BFF --> REDIS[("Redis · Upstash<br/>rate-limit · answer cache")]
@@ -113,7 +115,7 @@ The differentiators — the **agentic LangGraph core**, the **guardrail + read-o
 |---|---|---|
 | Agent | LangGraph 1.2 | Durable state, checkpoints, HITL interrupts, subgraphs |
 | Backend | FastAPI + Pydantic v2 + SQLAlchemy 2 (async) | Typed, async, boundary validation as a control |
-| LLMs | Ollama (self-hosted, primary) + Gemini/Groq fallback, pluggable | Provider abstraction + circuit breaker; private GPU, strictly free |
+| LLMs | Groq (deployed) + Gemini fallback; self-hosted Ollama swappable behind the same port | Provider abstraction + circuit breaker; a public URL must answer when my PC is off |
 | Data / vectors | Postgres + pgvector (Neon) | One system for relational data *and* embeddings |
 | Cache / limits | Redis (Upstash) | Result cache, rate limiting, breaker state |
 | LLMOps | MLflow 3.14 | Tracing, prompt registry, evaluation, CI gate |
