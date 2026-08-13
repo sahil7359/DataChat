@@ -74,3 +74,18 @@ def test_list_settings_keep_their_defaults_when_unset() -> None:
     settings = Settings()
     assert settings.cors_origins == ("http://localhost:3000",)
     assert [p.value for p in settings.provider_order] == ["gemini", "groq"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://data-chat-seven.vercel.app/",
+        "https://data-chat-seven.vercel.app",
+        "https://data-chat-seven.vercel.app///",
+    ],
+)
+def test_cors_origin_trailing_slash_is_stripped(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    """A browser Origin header has no path, so a configured trailing slash can
+    never match. Copying the URL out of a hosting dashboard always adds one."""
+    monkeypatch.setenv("DATACHAT_CORS_ORIGINS", raw)
+    assert Settings().cors_origins == ("https://data-chat-seven.vercel.app",)

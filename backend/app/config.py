@@ -141,6 +141,20 @@ class Settings(BaseSettings):
                 return json.loads(text)
         return [item.strip() for item in text.split(",") if item.strip()]
 
+    @field_validator("cors_origins", mode="after")
+    @classmethod
+    def _normalise_origins(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        """Drop trailing slashes from configured origins.
+
+        why: a browser's ``Origin`` header is scheme + host + port and never has a
+        path, so ``https://app.vercel.app/`` can never match one. Starlette
+        compares exactly, and the failure is silent from the server's side — the
+        API answers 200 to curl and the browser blocks it, which reads as "the
+        frontend is broken". Copying a URL out of a hosting dashboard gives you
+        the trailing slash every time, so normalise rather than expect care.
+        """
+        return tuple(origin.rstrip("/") for origin in value)
+
 
 @lru_cache
 def get_settings() -> Settings:
