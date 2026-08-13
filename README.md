@@ -5,8 +5,6 @@
 **Ask open data in plain English. Get safe, verified SQL, a grounded answer, and a chart.**
 An agentic natural-language analytics platform over public datasets — built as a real LangGraph agent, evaluated, observable, and secured, running entirely on free tiers.
 
-<!-- Rename freely — "DataChat" is a working title. -->
-
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.2-1C3C3C)

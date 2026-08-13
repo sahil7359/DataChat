@@ -116,7 +116,19 @@ def _inline(text: str) -> str:
     text = _ascii(text)
     text = html.escape(text)
 
-    text = re.sub(r"`([^`]+)`", r'<font face="Courier" size="8.5">\1</font>', text)
+    # Code spans are lifted out before emphasis runs. why: they were previously
+    # replaced with <font> tags first, so a later bold/italic regex could match
+    # across a tag boundary and emit overlapping markup -- `***` inside backticks
+    # produced "<font ...></b>*</font>**", which reportlab rejects. It does not
+    # merely lose the emphasis: the whole paragraph is dropped from the document,
+    # silently, so content disappears without the build failing.
+    spans: list[str] = []
+
+    def _stash(m: re.Match[str]) -> str:
+        spans.append(m.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = re.sub(r"`([^`]+)`", _stash, text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
     text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", text)
     # Only http(s)/mailto become clickable. A relative path or an in-page anchor
@@ -133,7 +145,26 @@ def _inline(text: str) -> str:
 
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _link, text)
     text = re.sub(r"@@SUB(\d)@@", r"<sub>\1</sub>", text)
+    text = re.sub(
+        r"\x00(\d+)\x00",
+        lambda m: f'<font face="Courier" size="8.5">{spans[int(m.group(1))]}</font>',
+        text,
+    )
     return text
+
+
+def _para(markup: str, style: ParagraphStyle, **kw: object) -> Paragraph:
+    """Build a Paragraph, failing loudly if the markup is malformed.
+
+    why: reportlab reports a parse error on stderr and then drops the paragraph,
+    so a bad inline conversion silently removes content from the document while
+    the build still reports success. A generator that quietly loses pages is worse
+    than one that stops.
+    """
+    try:
+        return Paragraph(markup, style, **kw)  # type: ignore[arg-type]
+    except Exception as exc:  # pragma: no cover - build-time guard
+        raise SystemExit(f"malformed markup in generated PDF:\n  {markup[:300]}\n  {exc}") from exc
 
 
 def _styles() -> dict[str, ParagraphStyle]:
@@ -212,7 +243,7 @@ def render(md: str, st: dict[str, ParagraphStyle]) -> list:
                 i += 1
             i += 1
             if lang == "mermaid":
-                flow.append(Paragraph(
+                flow.append(_para(
                     "<b>[ Diagram ]</b> A Mermaid diagram appears here in the source "
                     "Markdown; it renders on GitHub. See the file named at the start "
                     "of this chapter.", st["note"]))
@@ -251,7 +282,7 @@ def render(md: str, st: dict[str, ParagraphStyle]) -> list:
                 i += 1
                 continue
             key = {2: "h1", 3: "h2"}.get(level, "h3")
-            flow.append(Paragraph(_inline(text), st[key]))
+            flow.append(_para(_inline(text), st[key]))
             i += 1
             continue
 
@@ -260,7 +291,7 @@ def render(md: str, st: dict[str, ParagraphStyle]) -> list:
             while i < len(lines) and lines[i].startswith(">"):
                 buf.append(lines[i].lstrip("> ").rstrip())
                 i += 1
-            flow.append(Paragraph(_inline(" ".join(b for b in buf if b)), st["quote"]))
+            flow.append(_para(_inline(" ".join(b for b in buf if b)), st["quote"]))
             continue
 
         m = re.match(r"^(\s*)([-*+]|\d+\.)\s+(.*)$", line)
@@ -277,7 +308,7 @@ def render(md: str, st: dict[str, ParagraphStyle]) -> list:
                 items.append(mm_.group(3))
                 i += 1
             for it in items:
-                flow.append(Paragraph(_inline(it), st["bullet"], bulletText="-"))
+                flow.append(_para(_inline(it), st["bullet"], bulletText="-"))
             flow.append(Spacer(1, 5))
             continue
 
@@ -292,7 +323,7 @@ def render(md: str, st: dict[str, ParagraphStyle]) -> list:
         ):
             para.append(lines[i].strip())
             i += 1
-        flow.append(Paragraph(_inline(" ".join(para)), st["body"]))
+        flow.append(_para(_inline(" ".join(para)), st["body"]))
     return flow
 
 
