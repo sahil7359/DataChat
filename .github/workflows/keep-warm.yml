@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Ping readiness
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${{ vars.KEEP_WARM_URL }}")
+          url="${{ vars.KEEP_WARM_URL }}"
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$url") && break
+            echo "attempt $i: curl failed (exit $?), retrying in 10s..."
+            sleep 10
+          done
           echo "ready -> $code"
           test "$code" = "200"
