@@ -14,7 +14,7 @@ class GroqAdapter(OpenAICompatibleAdapter):
         client: httpx.AsyncClient,
         api_key: str,
         *,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "openai/gpt-oss-120b",
         timeout_s: float = 30.0,
     ) -> None:
         super().__init__(

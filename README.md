@@ -35,12 +35,17 @@ oversight** — the whole system runs at **$0/month** on free tiers, and the poi
 the project is retrieval quality and evaluation, not corpus size. Widening it is a
 config change, not a rewrite.
 
-| Measured on **Groq `llama-3.3-70b-versatile`**, `temperature=0` | Score | n |
+| Measured on **Groq `openai/gpt-oss-120b`**, `temperature=0` | Score | n |
 |---|---:|---:|
-| Execution accuracy — result set equals the gold query's, exactly | **0.810** | 21 |
+| Execution accuracy — result set equals the gold query's, exactly | **0.524** | 21 |
 | Refusal accuracy — declined instead of inventing an answer | **1.00** | 5 |
-| SQL valid rate — parses and passes the AST guardrail | **0.952** | 21 |
-| Explanation faithfulness — prose grounded in the returned rows | **0.905** | 21 |
+| SQL valid rate — parses and passes the AST guardrail | **0.667** | 21 |
+| Explanation faithfulness — prose grounded in the returned rows | **0.619** | 21 |
+
+Groq retired `llama-3.3-70b-versatile` (and every other Llama model) on
+2026-08-23, which broke the live demo until this model swap — see
+[LEARN.md](./LEARN.md) for the incident. These numbers are lower than the
+retired model's 0.81/0.90 and are published as measured, not softened.
 
 Reproduce with `make eval-real`. Baselines are committed per provider in
 [`backend/eval_baseline.json`](backend/eval_baseline.json); see
@@ -150,7 +155,7 @@ To use real models later, set `USE_MOCKS=false` and add keys — see **[GOLIVE.m
 | Backend | Render (free) | <https://datachat-api-wmpd.onrender.com> |
 | Database | Neon (Postgres 16 + pgvector) | — |
 | Cache / rate limit | Upstash Redis | — |
-| Model | Groq `llama-3.3-70b-versatile` | — |
+| Model | Groq `openai/gpt-oss-120b` | — |
 
 **Total cost: $0/month.** Every component is a permanent free tier.
 
@@ -245,12 +250,12 @@ Measured at `temperature=0` against the `seed` dataset. Reproduce with
 as much a property of the model as of the pipeline, so one blended number across
 providers would mean nothing.
 
-| Metric | **Groq `llama-3.3-70b-versatile`** *(deployed)* | Ollama `qwen2.5:7b-instruct` *(self-hosted)* | n |
+| Metric | **Groq `openai/gpt-oss-120b`** *(deployed)* | Ollama `qwen2.5:7b-instruct` *(self-hosted)* | n |
 |---|---:|---:|---:|
-| Execution accuracy | **0.810** | 0.667 | 21 |
+| Execution accuracy | **0.524** | 0.667 | 21 |
 | Refusal accuracy | **1.00** | 0.80 † | 5 |
-| SQL valid rate | **0.952** | 0.952 | 21 |
-| Explanation faithfulness | **0.905** | 0.857 | 21 |
+| SQL valid rate | **0.667** | 0.952 | 21 |
+| Explanation faithfulness | **0.619** | 0.857 | 21 |
 
 **Refusal accuracy was 0.80 and is now 1.00.** One in five out-of-scope questions
 was being answered rather than declined, which on a public demo is a
@@ -260,8 +265,13 @@ was not a careless model: *"what will global CO₂ be in 2030?"* produced
 **one row containing NULL**, so the pipeline saw `row_count = 1` and concluded it
 had an answer. Fixed by deciding scope deterministically *before* SQL generation
 (a named country or year outside the loaded slice is a fact, not a judgement) and
-by treating an all-NULL row as no data. Execution accuracy was unchanged at
-0.8095, which is the check that matters — the gate added no false refusals.
+by treating an all-NULL row as no data.
+
+**Execution accuracy dropped from 0.810 to 0.524 on 2026-08-23**, not from this
+fix — Groq retired `llama-3.3-70b-versatile` (every Llama model, in fact) and the
+production default silently 404'd until swapped to `openai/gpt-oss-120b`, the
+best of the two available replacements tested. Published as measured; see
+[LEARN.md](./LEARN.md) for the incident and the rejected alternative.
 
 <sub>† The Ollama column was measured **before** the scope gate. Its one refusal
 miss was *"Show me the best countries"*, an ambiguity case the gate does not

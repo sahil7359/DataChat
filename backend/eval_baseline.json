@@ -10,8 +10,19 @@
   "_tolerance_rationale": "One answerable case is worth 1/21 = 0.0476. A tolerance below that fires on a single case flipping, which is noise, not regression; 0.05 absorbs exactly one case and blocks two (0.0952). Sampling variance is not the driver - temperature is 0.0 - so the tolerance is sized by set granularity. If the set grows to 50 answerable cases, one case becomes 0.02 and this should tighten.",
 
   "baselines": {
+    "groq/openai/gpt-oss-120b": {
+      "_note": "The deployed provider as of 2026-08-23. Groq decommissioned every Llama model (including llama-3.3-70b-versatile below, which 404'd in production) sometime before this date; gpt-oss-120b is the closest available flagship model on Groq's current lineup, chosen after a head-to-head against qwen/qwen3.6-27b (0.0476 across the board - its <think> reasoning-block output broke SQL extraction almost entirely) and measured through the same decorator stack production uses.",
+      "_regression_note": "Execution accuracy 0.8095 -> 0.5238 and sql_valid_rate 0.9524 -> 0.6667 versus the retired llama-3.3-70b-versatile baseline. This is a real quality drop from a forced model swap (the old model no longer exists on Groq at any price), not a pipeline regression - Tier 1 (scripted-LLM) still scores 1.0. Published as measured, not softened; see LEARN.md 2026-08-23.",
+      "measured_at": "2026-08-23",
+      "temperature": 0.0,
+      "dataset": "seed",
+      "execution_accuracy": 0.5238,
+      "refusal_accuracy": 1.0,
+      "sql_valid_rate": 0.6667,
+      "faithfulness": 0.619
+    },
     "groq/llama-3.3-70b-versatile": {
-      "_note": "The deployed provider. Measured through the same decorator stack production uses - the free tier rate-limits a back-to-back 26-case run, and RetryingProvider honours Retry-After.",
+      "_note": "RETIRED 2026-08-23 - Groq removed this model from its API (404 model_not_found) sometime after the measurement below; every Llama model is gone from Groq's lineup. Kept for historical comparison only; the deployed provider is now groq/openai/gpt-oss-120b above.",
       "_refusal_note": "0.80 -> 1.00 after the deterministic scope gate (2026-08-14). Execution accuracy was unchanged at 0.8095, which is the check that matters: the gate caught the miss without refusing anything answerable.",
       "measured_at": "2026-08-14",
       "temperature": 0.0,

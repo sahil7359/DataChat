@@ -8,6 +8,322 @@ For *how the system works* rather than why it changed, see [FLOW.md](./FLOW.md).
 
 ---
 
+## 2026-08-23 — System design interview pack (HLD, LLD, the questions that follow), and a live incident found while measuring it
+
+The full design docs already exist — [TechSpec](./TechSpec.md), [Design](./Design.md),
+[Schema](./Schema.md), [AppFlow](./AppFlow.md), [FLOW.md](./FLOW.md). This section is
+different on purpose: it's the **five-minute verbal version** of those docs, shaped
+the way a system-design interview actually runs — HLD first, LLD on request, then
+the follow-up questions an interviewer reaches for on a project like this one.
+Researched against current (2026) system-design and GenAI-interview guidance, not
+guessed.
+
+### High-level design — the whiteboard version
+
+**Problem in one line:** turn a plain-English question into a *safe, grounded,
+verified* SQL analysis over curated open data — an agent (plan → generate →
+guardrail → execute → verify → repair → explain), not a single prompt.
+
+**Requirements, stated the way an interviewer wants them stated:**
+- Functional: NL → SQL → executed rows → grounded prose + chart, streamed; HITL
+  approve/edit and clarify; conversation memory.
+- Non-functional, with numbers, not adjectives: first token ≤ ~2s warm, p95 ≤ ~8s;
+  cold-start recovery ≤ ~60s with no state loss; $0/month (see [TechSpec §11](./TechSpec.md)
+  for the full free-tier budget); ≥80% unit coverage on domain/application; 100%
+  of runs traced.
+- **Explicitly out of scope, stated up front** — see the [scope section](#scope--what-a-strong-candidate-declares-and-why)
+  below; this is the part candidates under-invest in and it is scored.
+
+**Component diagram (condensed from [TechSpec §2](./TechSpec.md#2-architecture)):**
+
+```
+Next.js UI (Vercel) --HTTPS/SSE--> FastAPI BFF (Render, one process)
+                                      |
+                          rate-limit + idempotency (Redis)
+                                      |
+                              LangGraph orchestrator
+                         /            |              \
+              Semantic layer    SQL guardrail    LLM provider gateway
+              (pgvector RAG)    + RO executor     (Adapter+Strategy+
+                    |                 |             Decorator+Breaker)
+                    +--------> Postgres (Neon) <----------+
+                    (app schema rw / analytics schema ro)      Groq/Gemini (httpx)
+```
+
+**Why a modular monolith, not microservices** — the question every interviewer
+asks: the free tier cannot run eight always-on services, and networking a young
+system into services you don't yet need is the *distributed monolith*
+anti-pattern — all the ops cost, none of the payoff. So: **one deployable
+process**, internal modules with **microservice-grade boundaries** (clean
+architecture, ports, dependency inversion) so any module — the LLM gateway, the
+guardrail, the semantic layer — could be extracted to its own service later
+**without touching the domain code**. Say it exactly like that; it's the
+"microservice-ready, not microservice-burdened" line from [TechSpec §2](./TechSpec.md#2-architecture).
+
+**The one flow worth walking end to end** (pick this if asked for depth — it's
+the one with the interesting decisions in it): ask → retrieve schema context
+(RAG) → plan → generate SQL → **guardrail** (parse the AST, reject writes /
+multi-statement / non-allow-listed tables / missing `LIMIT`) → execute against a
+**separate read-only DB role**, not just an app-level check → verify the shape →
+on failure, **bounded repair** (≤2 attempts) using the DB error as feedback → explain
+→ chart → stream. Full sequence diagram: [AppFlow §2](./AppFlow.md#2-happy-path--ask--streamed-answer).
+
+### Low-level design — the "now go deeper" version
+
+Pull this out only if asked; it's [Design.md](./Design.md) condensed to the parts
+that come up.
+
+- **Dependency rule:** `interface → application → domain ← infrastructure`. Domain
+  imports nothing outward — no FastAPI, no SQLAlchemy, no LangGraph. Adapters
+  implement domain **ports** (`LLMProvider`, `SchemaCatalog`, `SqlValidator`,
+  `QueryExecutor`, `Cache`). This is what makes "what if Groq disappears" a
+  one-adapter change instead of a rewrite — see the incident below, where that's
+  exactly what happened.
+- **LLM Provider Gateway** = Adapter (one class per vendor) + Strategy
+  (`ProviderRouter` picks one) + Decorator (retry → cache → trace → circuit-breaker
+  wraps each adapter) + Circuit Breaker (opens after `breaker_fail_threshold=5`
+  consecutive failures, half-opens to probe). Adding a vendor is a new adapter
+  class + one config line — **OCP**, not a router rewrite.
+- **SQL guardrail** = Chain of Responsibility. Each rule (`SingleStatementRule`,
+  `ReadOnlyRule`, `TableAllowlistRule`, `NoSystemCatalogRule`, `MandatoryLimitRule`)
+  parses the `sqlglot` AST independently and the chain short-circuits on first
+  failure. This is layer 1 of 2 — layer 2 is the DB role itself (§ below) —
+  **defence in depth**, either alone would suffice.
+- **Agent nodes** = Template Method (`BaseNode.__call__` fixes: open trace span →
+  `_run` → validate output as untrusted (LLM05) → checkpoint; subclasses fill only
+  `_run`, so no node can skip tracing or validation) built by a Factory.
+- **Data isolation, the security spine:** two schemas, two roles. `app` (rw,
+  conversations/runs/semantic layer/eval) and `analytics` (the open datasets). The
+  executor connects as `datachat_exec`, a **separate login role** with
+  `default_transaction_read_only=on`, `search_path=analytics`, and a 5s
+  `statement_timeout` — bulkhead pattern. Even a fully bypassed guardrail chain
+  hits a database that physically cannot write or cross schemas. See
+  [Schema §5](./Schema.md#5-read-only-role--execution-safety-the-security-spine).
+- **State & durability:** LangGraph's `PostgresSaver` checkpoints after every node,
+  so a HITL interrupt or a cold start resumes from exactly where it left off — no
+  in-memory state anywhere on the request path (**NFR-10**, stateless BFF).
+
+### The questions that follow a design like this
+
+Researched against 2026 GenAI/agentic system-design interview guides (PracHub,
+System Design Handbook, KDnuggets, DesignGurus, and the Agentic AI interview
+literature) — these are the categories interviewers reach for once the HLD is on
+the board, mapped to how *this* project actually answers them, gaps included.
+Sources at the bottom.
+
+#### "How would you limit token usage?"
+
+Answer with what's actually built, then name the gap — that's the senior-signal
+move, not reciting a generic list:
+
+- **Retrieval-limited context** (already built): the prompt gets top-*k*
+  pgvector-retrieved schema/examples, not the whole semantic layer — this is the
+  project's actual RAG component and it's a token-budget decision as much as a
+  quality one ([TechSpec §7](./TechSpec.md#7-semantic-layer--retrieval-rag-to-sql)).
+- **Exact-match answer cache** (already built): `cache:answer:{sha256(question)}`
+  in Redis, 1h TTL — a cache hit burns **zero** tokens and answers in ~80ms
+  instead of running the graph at all ([Schema §7](./Schema.md#7-redis-upstash-key-patterns--ttls)).
+- **Bounded loops** (already built): `max_repair_attempts=2` caps the
+  generate→guardrail→repair cycle, so a stubborn bad query can't silently burn an
+  unbounded number of calls ([config.py](../backend/app/config.py)).
+- **Global + per-session quotas** (already built): `global_daily_quota=1000`,
+  `rate_limit_per_min=20`, enforced in Redis before the graph ever runs — this is
+  the layer research calls "gateway-level budget enforcement," here implemented
+  with token-bucket counters rather than a managed API gateway product.
+- **Circuit breaker** (already built): stops calling a provider that's already
+  failing rather than retrying into a wall.
+- **The honest gap:** `LLMRequest.max_tokens` exists in the domain model
+  ([entities.py](../backend/app/domain/entities.py)) but **no node ever sets it** —
+  every call is provider-default length, uncapped. That's a real, one-line fix
+  (`max_tokens=200` on `explain`, tighter on `classify`/`verify`) that was never
+  prioritized because free-tier daily *request* caps were the binding constraint,
+  not per-call *token* cost. Naming this unprompted is exactly the "propose what
+  you'd add, and why it wasn't done yet" move the interview guides call out as a
+  staff-level signal, not a weakness to hide.
+- **Not built, and worth naming as "next":** semantic caching (today's cache is
+  exact-match only — a paraphrase misses), and cost/complexity-based model
+  routing (provider order is fixed by quota headroom, not per-request routed by
+  question difficulty).
+
+#### "How would this scale to a million users?"
+
+Bottleneck framing an interviewer wants to hear: it isn't CPU or memory, it's
+**LLM inference throughput and per-provider rate limits** — a server at 20% CPU
+can still be maxed out because every request is blocked on a 30s provider call
+capped at N requests/day. Given that:
+
+- The backend is **stateless by design** (all state in Postgres/Redis via the
+  checkpointer), so horizontally scaling the process is "in principle, not yet
+  needed" — true today, and defensible because it wasn't retrofitted.
+- The real ceiling isn't the app, it's the **free-tier LLM/DB quotas** ([TechSpec §11](./TechSpec.md#11-0-cost-table-proof)).
+  At real scale the fix isn't "add servers," it's **provider tiers with paid
+  throughput + prompt caching on the shared system prompt** (the research is
+  explicit that a 5k-token system prompt resent on every call is the usual hidden
+  cost driver) + **model routing by complexity** (small/cheap model for
+  `classify`/`verify`, large model reserved for `generate_sql`/`explain`).
+- Neon and Upstash both scale-to-zero on the free tier; at real traffic that
+  setting is the first thing to turn off, not a code change.
+
+#### "What happens when a provider goes down?"
+
+The designed answer: circuit breaker opens after `breaker_fail_threshold`
+consecutive failures, `ProviderRouter` fails over to the next configured
+provider, retries respect `Retry-After`. **The honest answer, proven true this
+session:** see the incident below — production currently has exactly **one**
+provider registered, so "failover" has never actually been exercised in prod. A
+good interviewer will ask "have you *tested* the failover path in production, or
+only in code?" — the honest answer here is "no," and that's a stronger answer
+than pretending otherwise.
+
+#### Security — "this looks like SQL injection, why isn't it solved the same way?"
+
+A favorite probe, and this project has a real answer: SQL injection was solved
+architecturally — parameterized queries put a hard boundary between code and
+data that the database itself enforces. **No equivalent exists for prompts** —
+the model has to interpret natural language to work at all, so you cannot
+parameterize your way out of it. That's why this system leans on **layers the
+model can't talk its way around**: an AST guardrail that never trusts the model's
+claim that its own SQL is safe, and underneath that, a **database role that
+physically cannot write**, independent of anything the LLM believes about itself.
+Prompt injection specifically is scoped down, not solved: the web fallback treats
+every search snippet as untrusted, parses the model's extraction back into a
+strict schema, and drops any row that cites a source index the model wasn't
+actually shown — the parser is the control, the prompt is just a request (see
+`web_table@v1`, above, 2026-08-11 entry).
+
+#### Evaluation — "how do you know the answer is even right?"
+
+Two-tier, because "the eval passed" and "the model is good" are different claims
+that must never share one number:
+
+- **Tier 1 (`pytest -m eval`, CI, every push):** the real graph, real pgvector,
+  real read-only executor — but a *scripted* LLM that returns the gold SQL. Model
+  quality is pinned at perfect on purpose, so this number moves only when the
+  **pipeline** breaks, and it's calibrated to fail (verified by mutation, see
+  2026-08-11 entry).
+- **Tier 2 (`pytest -m eval_real`, opt-in):** the same 26-case golden set (21
+  answerable + 5 refusal) against the real deployed provider, scored on four axes
+  that are deliberately never blended into one number: `execution_accuracy`
+  (BIRD-style result-set equality — different SQL, same rows, still correct),
+  `refusal_accuracy` (did it decline the 5 out-of-scope cases instead of
+  hallucinating an answer — the failure mode that actually hurts a user),
+  `sql_valid_rate` (parses + passes the guardrail), and **`faithfulness`**
+  (LLM-as-judge, 0–1, grading whether the prose explanation is *supported by the
+  returned rows* — not whether it's fluent).
+- The tolerance (0.05) is sized by set granularity, not model jitter — at 21
+  answerable cases, one flipped case moves the score by 1/21 ≈ 0.048, so a
+  tighter gate fires on noise.
+
+#### Scope — what a strong candidate declares, and why
+
+Research consensus (System Design Handbook, Exponent, staff-level interview
+guides) is blunt about this: **stating exclusions explicitly, early, with a
+reason, is scored** — "out of scope" left implicit is where solid engineers
+quietly lose points, and naming a tradeoff you *chose against* signals more
+seniority than naming the one you built. This project already has a ready-made
+answer — [PRD §3](./PRD.md#3-goals--non-goals), verbatim, because it was written
+before any code, not rationalized after:
+
+> No write/DDL, ever. No user-uploaded datasets in v1. No multi-tenant SaaS or
+> billing. No model fine-tuning — grounding is retrieval, not weights. Not a
+> general chatbot — out-of-scope questions are refused, not guessed at. No
+> multi-agent mesh across network boundaries — sub-steps are LangGraph subgraphs
+> in one process, which structurally removes an entire OWASP Agentic category
+> (ASI07, insecure inter-agent comms) rather than mitigating it.
+
+The template worth reusing out loud, straight from the research: **declare it**
+("write/DDL is out of scope for this design"), **justify it** ("a read-only agent
+has a fundamentally smaller blast radius, and that's the property this whole
+design optimizes for"), **leave the door open** ("if we have time, I can sketch
+how a write-capable version would add an approval workflow on top of the same
+guardrail chain"). Don't just name the technology you excluded — name what
+building it would have cost and what it would have put at risk instead.
+
+### A live incident, found while writing this section
+
+Measuring the faithfulness number below required a real run against the deployed
+provider — and it failed immediately, not with a rate limit but with `client
+error 404`. Groq's model catalog no longer contains **any** Llama model,
+including `llama-3.3-70b-versatile`, the one this codebase had hardcoded as the
+`GroqAdapter` default since the project began. Direct request to
+`api.groq.com/openai/v1/chat/completions` confirmed it: `"model_not_found"`.
+
+**This meant the live public demo was down for every request**, not just the
+eval — confirmed by curling the deployed endpoint directly and getting back
+`event: error / providers_unavailable` instead of an answer. And it surfaced the
+gap named above under "what happens when a provider goes down": `Container.llm()`
+([container.py](../backend/app/container.py)) only registers a provider whose key
+is present, and `render.yaml` deliberately declares **only** `DATACHAT_GROQ_API_KEY`
+in production (Gemini is documented as "add in the dashboard when you actually
+want it" — never done). So the circuit-breaker/fallback machinery that's real and
+tested in code had **nothing to fall back to** in production. One dead model name
+was a full outage, not a degraded mode — exactly the single-point-of-failure this
+design is supposed to route around, undone by a deploy-time config choice the
+design docs never flagged as a risk.
+
+**Fix:** swapped the `GroqAdapter` default to `openai/gpt-oss-120b` — the closest
+available flagship model on Groq's current lineup (131k context, comparable
+class to the retired 70B Llama) — verified against Groq's live `/models` list
+rather than guessed. Re-measured against the golden set (below) before
+committing, per this repo's own rule: "swapping providers is a deliberate act
+that needs its own measurement, not a silent pass or fail" (`eval_baseline.json`).
+
+**Still open, not fixed here — a product/ops decision, not a code fix:** add a
+second provider key (Gemini, per the original TechSpec design) to production so
+failover is actually exercised, not just implemented. Logged rather than done
+silently, matching this repo's habit of naming gaps instead of hiding them
+(see `Tracker.md` → Known open items).
+
+### Settled: faithfulness on the golden set
+
+Measured via `DATACHAT_EVAL_REAL=1 uv run pytest -m eval_real -s`, temperature
+0.0, the full 26-case golden set (21 answerable + 5 refusal), against the
+**currently deployed** provider — real graph, real pgvector catalog, real
+read-only executor, real network calls, no mocks.
+
+| Provider | execution_accuracy | refusal_accuracy | sql_valid_rate | **faithfulness** |
+|---|---:|---:|---:|---:|
+| **`groq/openai/gpt-oss-120b`** *(deployed now)* | 0.5238 | 1.0000 | 0.6667 | **0.6190** |
+| `groq/llama-3.3-70b-versatile` *(retired by Groq, historical)* | 0.8095 | 1.0000 | 0.9524 | 0.9048 |
+| `groq/qwen/qwen3.6-27b` *(rejected)* | 0.0476 | 1.0000 | 0.0476 | 0.0476 |
+
+**Settled number: faithfulness = 0.62** (21 answerable cases, `openai/gpt-oss-120b`,
+`temperature=0`, measured 2026-08-23 — full run in `eval_baseline.json`).
+
+Reported plainly, not softened: this is a **real drop** from the 0.90 the retired
+model measured, not a pipeline issue — Tier 1 (the scripted-LLM pipeline gate)
+still scores a clean 1.0, so the graph, retrieval, guardrail, and scoring
+machinery are all intact. The drop is the model. `qwen/qwen3.6-27b` was tried
+first and rejected outright — it emits `<think>...</think>` reasoning blocks by
+default, which the SQL-extraction step doesn't strip, so `sql_valid_rate`
+collapsed to 0.0476 (one lucky case out of 21). `gpt-oss-120b` was the better of
+the two available replacements, not a good one in absolute terms — worth a
+prompt-tuning pass or a different provider entirely, logged as a follow-up
+rather than fixed here.
+
+`faithfulness` is the LLM-as-judge score from `FaithfulnessJudge`
+([eval_service.py](../backend/app/application/services/eval_service.py)):
+graded 0–1 per answerable case on whether every claim in the generated prose
+explanation is supported by the actual returned rows (not whether it's
+fluent, not whether the SQL was right — a query can be wrong *and* the
+resulting sentence can still be faithful to the wrong rows it saw), then
+averaged over the 21 answerable cases.
+
+**Sources consulted for this section:** [PracHub GenAI & LLM System Design
+Interview Guide](https://prachub.com/resources/genai-llm-system-design-interview-guide-2026) ·
+[System Design Handbook — Generative AI System Design Interview](https://www.systemdesignhandbook.com/guides/generative-ai-system-design-interview/) ·
+[System Design Handbook — LLM System Design](https://www.systemdesignhandbook.com/guides/llm-system-design/) ·
+[System Design Handbook — Scale AI System Design Interview](https://www.systemdesignhandbook.com/guides/scale-ai-system-design-interview/) ·
+[Redis — LLM Token Optimization](https://redis.io/blog/llm-token-optimization-speed-up-apps/) ·
+[Trident Ventures — LLM Cost Control at Scale](https://tridentventures.org/blog/llm-cost-control-scale) ·
+[NeuralTrust — AI Token Optimization Guide](https://neuraltrust.ai/blog/ai-token-optimization-guide) ·
+[NVIDIA — Scaling LangGraph Agents in Production](https://developer.nvidia.com/blog/how-to-scale-your-langgraph-agents-in-production-from-a-single-user-to-1000-coworkers/) ·
+[Cisco — Prompt Injection is the New SQL Injection](https://blogs.cisco.com/ai/prompt-injection-is-the-new-sql-injection-and-guardrails-arent-enough) ·
+[The Architect's Notebook — How to Think Out Loud in a System Design Interview](https://thearchitectsnotebook.substack.com/p/system-design-insight-how-to-think) ·
+[DesignGurus — LLD vs System Design Interview Questions](https://www.designgurus.io/answers/detail/difference-between-low-level-design-and-system-design-interview-questions).
+
+---
+
 ## 2026-08-14 - CI was never green, and two production bugs
 
 Sixteen commits. The theme: gates that reported success without checking
